@@ -1,11 +1,14 @@
+import Sidebar from "./components/layout/Sidebar";
+import Header from "./components/layout/Header";
+
 function App() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
-      <h1 className="text-4xl font-bold text-blue-600">
-        Billing Reminder System
-      </h1>
+    <div className="min-h-screen bg-[#fcf8ff]">
+      <Sidebar />
+
+      <Header />
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
