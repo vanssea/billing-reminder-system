@@ -20,3 +20,9 @@
   -webkit-font-smoothing: antialiased;
   font-feature-settings: 'liga';
 }
+
+/* Sembunyikan tombol mata bawaan browser (Edge/IE) pada input password */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
