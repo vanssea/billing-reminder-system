@@ -1,13 +1,14 @@
-import Sidebar from "./components/layout/Sidebar";
-import Header from "./components/layout/Header";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import LandingPage from "./pages/auth/LandingPage";
 
 function App() {
   return (
-    <div className="min-h-screen bg-[#fcf8ff]">
-      <Sidebar />
-
-      <Header />
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
