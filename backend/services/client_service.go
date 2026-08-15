@@ -5,14 +5,14 @@ import (
 
 	"billing-reminder-system/models"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type ClientService struct {
-	DB *pgx.Conn
+	DB *pgxpool.Pool
 }
 
-func NewClientService(db *pgx.Conn) *ClientService {
+func NewClientService(db *pgxpool.Pool) *ClientService {
 	return &ClientService{
 		DB: db,
 	}

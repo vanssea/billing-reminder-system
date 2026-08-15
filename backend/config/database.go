@@ -5,27 +5,26 @@ import (
 	"log"
 	"os"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func ConnectDatabase() *pgx.Conn {
+func ConnectDatabase() *pgxpool.Pool {
 	databaseURL := os.Getenv("DATABASE_URL")
 
 	if databaseURL == "" {
 		log.Fatal("DATABASE_URL tidak ditemukan")
 	}
 
-	conn, err := pgx.Connect(context.Background(), databaseURL)
+	pool, err := pgxpool.New(context.Background(), databaseURL)
 	if err != nil {
-		log.Fatal("Gagal terhubung ke Supabase:", err)
+		log.Fatal("Gagal membuat koneksi ke Supabase:", err)
 	}
 
-	err = conn.Ping(context.Background())
-	if err != nil {
+	if err := pool.Ping(context.Background()); err != nil {
 		log.Fatal("Database tidak merespons:", err)
 	}
 
 	log.Println("Berhasil terhubung ke Supabase!")
 
-	return conn
+	return pool
 }
