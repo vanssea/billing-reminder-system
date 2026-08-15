@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"net/http"
 	"time"
@@ -11,6 +10,8 @@ import (
 	"billing-reminder-system/routes"
 	"billing-reminder-system/services"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
 )
 
@@ -23,16 +24,45 @@ func main() {
 
 	// Koneksi ke database Supabase
 	db := config.ConnectDatabase()
-	defer db.Close(context.Background())
+	defer db.Close()
 
 	// Membuat service
 	clientService := services.NewClientService(db)
+	adminService := services.NewAdminService(db)
 
 	// Membuat handler
 	clientHandler := handlers.NewClientHandler(clientService)
+	adminHandler := handlers.NewAdminHandler(adminService)
 
-	// Setup routes
-	router := routes.SetupRoutes(clientHandler)
+	// Setup router
+	router := chi.NewRouter()
+
+	// CORS
+	router.Use(cors.Handler(cors.Options{
+		AllowedOrigins: []string{
+			"http://localhost:5173",
+			"http://127.0.0.1:5173",
+		},
+		AllowedMethods: []string{
+			"GET",
+			"POST",
+			"PUT",
+			"DELETE",
+			"OPTIONS",
+		},
+		AllowedHeaders: []string{
+			"Accept",
+			"Authorization",
+			"Content-Type",
+			"X-CSRF-Token",
+		},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
+
+	// Routes
+	routes.ClientRoutes(router, clientHandler)
+	routes.AdminRoutes(router, adminHandler)
 
 	// Menjalankan server
 	server := &http.Server{
@@ -47,6 +77,7 @@ func main() {
 	log.Println("Backend Billing Reminder berjalan!")
 	log.Println("Server: http://localhost:8080")
 	log.Println("API Clients: http://localhost:8080/api/clients")
+	log.Println("API Admins: http://localhost:8080/api/admins")
 	log.Println("=================================")
 
 	err = server.ListenAndServe()
