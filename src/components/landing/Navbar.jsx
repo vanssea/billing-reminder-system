@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Menu, X, Zap } from "lucide-react";
 
 const navLinks = [
@@ -43,18 +44,18 @@ export default function Navbar() {
         </div>
 
         <div className="hidden items-center gap-3 lg:flex">
-          <a
-            href="#harga"
+          <Link
+            to="/login"
             className="rounded-full px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
           >
             Masuk
-          </a>
-          <a
-            href="#harga"
+          </Link>
+          <Link
+            to="/register"
             className="rounded-full bg-gradient-to-r from-brand-600 to-brand-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-600/30 transition hover:shadow-xl hover:shadow-brand-600/40 hover:brightness-110"
           >
             Coba Gratis
-          </a>
+          </Link>
         </div>
 
         <button
@@ -82,18 +83,20 @@ export default function Navbar() {
             ))}
           </div>
           <div className="mt-4 flex flex-col gap-2.5">
-            <a
-              href="#harga"
+            <Link
+              to="/login"
+              onClick={() => setOpen(false)}
               className="rounded-full border border-slate-200 px-5 py-2.5 text-center text-sm font-bold text-slate-700 transition hover:bg-slate-50"
             >
               Masuk
-            </a>
-            <a
-              href="#harga"
+            </Link>
+            <Link
+              to="/register"
+              onClick={() => setOpen(false)}
               className="rounded-full bg-gradient-to-r from-brand-600 to-brand-500 px-5 py-2.5 text-center text-sm font-bold text-white shadow-lg shadow-brand-600/30"
             >
               Coba Gratis
-            </a>
+            </Link>
           </div>
         </div>
       )}

@@ -1,54 +1,7 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Check, Sparkles } from "lucide-react";
-
-const plans = [
-  {
-    name: "Starter",
-    tagline: "Shared hosting untuk website pribadi atau portofolio",
-    monthly: 25000,
-    features: [
-      "1 website",
-      "10 GB storage NVMe",
-      "Bandwidth 50 GB",
-      "1 akun email",
-      "SSL gratis",
-      "Backup mingguan",
-    ],
-    cta: "Mulai Hosting",
-    popular: false,
-  },
-  {
-    name: "Pro",
-    tagline: "Untuk bisnis & toko online yang sedang bertumbuh",
-    monthly: 69000,
-    features: [
-      "10 website",
-      "50 GB storage NVMe",
-      "Bandwidth unlimited",
-      "Email unlimited",
-      "SSL gratis & LiteSpeed",
-      "Backup harian otomatis",
-      "Migrasi gratis",
-    ],
-    cta: "Pilih Pro",
-    popular: true,
-  },
-  {
-    name: "Bisnis",
-    tagline: "Cloud hosting untuk website trafik tinggi & enterprise",
-    monthly: 199000,
-    features: [
-      "Website unlimited",
-      "100 GB+ storage NVMe",
-      "Resource dedicated",
-      "Prioritas support 24/7",
-      "SLA uptime 99,9%",
-      "Backup harian & on-demand",
-    ],
-    cta: "Hubungi Kami",
-    popular: false,
-  },
-];
+import { plans } from "../../data/plans";
 
 const formatIDR = (value) => "Rp" + value.toLocaleString("id-ID");
 
@@ -142,8 +95,8 @@ export default function Pricing() {
                   ))}
                 </ul>
 
-                <a
-                  href="#harga"
+                <Link
+                  to={`/register?plan=${encodeURIComponent(plan.name)}`}
                   className={`mt-8 rounded-full px-6 py-3 text-center text-sm font-bold transition ${
                     plan.popular
                       ? "bg-gradient-to-r from-brand-600 to-brand-500 text-white shadow-lg shadow-brand-600/30 hover:brightness-110"
@@ -151,7 +104,7 @@ export default function Pricing() {
                   }`}
                 >
                   {plan.cta}
-                </a>
+                </Link>
               </div>
             );
           })}

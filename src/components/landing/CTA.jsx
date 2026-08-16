@@ -1,4 +1,5 @@
 import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export default function CTA() {
   return (
@@ -20,13 +21,13 @@ export default function CTA() {
             </p>
 
             <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <a
-                href="#harga"
+              <Link
+                to="/register"
                 className="group inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-base font-extrabold text-brand-700 shadow-xl transition hover:bg-brand-50"
               >
                 Mulai Hosting Sekarang
                 <ArrowRight className="h-5 w-5 transition group-hover:translate-x-1" />
-              </a>
+              </Link>
               <a
                 href="#fitur"
                 className="inline-flex items-center gap-2 rounded-full border border-white/40 px-8 py-3.5 text-base font-bold text-white transition hover:bg-white/10"
