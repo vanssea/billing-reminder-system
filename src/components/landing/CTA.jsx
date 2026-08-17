@@ -1,6 +1,11 @@
 import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useLowestProductPrice } from "../../hooks/useLowestProductPrice";
+import { formatIDR } from "../../utils/format";
 
 export default function CTA() {
+  const lowestPrice = useLowestProductPrice();
+
   return (
     <section className="bg-white pb-20 sm:pb-28">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -15,18 +20,19 @@ export default function CTA() {
               Siap Membuat Website Cepat &amp; Selalu Online?
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-white/85">
-              Website cepat, aman, dan uptime 99,9% dimulai dari Rp25.000/bulan — lengkap dengan
-              SSL gratis dan dukungan 24/7.
+              {lowestPrice != null
+                ? `Website cepat, aman, dan uptime 99,9% dimulai dari ${formatIDR(lowestPrice)}/bulan — lengkap dengan SSL gratis dan dukungan 24/7.`
+                : "Website cepat, aman, dan uptime 99,9% — lengkap dengan SSL gratis dan dukungan 24/7."}
             </p>
 
             <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <a
-                href="#harga"
+              <Link
+                to="/register"
                 className="group inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-base font-extrabold text-brand-700 shadow-xl transition hover:bg-brand-50"
               >
                 Mulai Hosting Sekarang
                 <ArrowRight className="h-5 w-5 transition group-hover:translate-x-1" />
-              </a>
+              </Link>
               <a
                 href="#fitur"
                 className="inline-flex items-center gap-2 rounded-full border border-white/40 px-8 py-3.5 text-base font-bold text-white transition hover:bg-white/10"

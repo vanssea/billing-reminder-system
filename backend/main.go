@@ -29,10 +29,16 @@ func main() {
 	// Membuat service
 	clientService := services.NewClientService(db)
 	adminService := services.NewAdminService(db)
+	productService := services.NewProductService(db)
+	testimonialService := services.NewTestimonialService(db)
+	faqService := services.NewFAQService(db)
 
 	// Membuat handler
 	clientHandler := handlers.NewClientHandler(clientService)
 	adminHandler := handlers.NewAdminHandler(adminService)
+	productHandler := handlers.NewProductHandler(productService)
+	testimonialHandler := handlers.NewTestimonialHandler(testimonialService)
+	faqHandler := handlers.NewFAQHandler(faqService)
 
 	// Setup router
 	router := chi.NewRouter()
@@ -63,6 +69,9 @@ func main() {
 	// Routes
 	routes.ClientRoutes(router, clientHandler)
 	routes.AdminRoutes(router, adminHandler)
+	routes.ProductRoutes(router, productHandler)
+	routes.TestimonialRoutes(router, testimonialHandler)
+	routes.FAQRoutes(router, faqHandler)
 
 	// Menjalankan server
 	server := &http.Server{
@@ -78,6 +87,9 @@ func main() {
 	log.Println("Server: http://localhost:8080")
 	log.Println("API Clients: http://localhost:8080/api/clients")
 	log.Println("API Admins: http://localhost:8080/api/admins")
+	log.Println("API Products: http://localhost:8080/api/products")
+	log.Println("API Testimonials: http://localhost:8080/api/testimonials")
+	log.Println("API FAQs: http://localhost:8080/api/faqs")
 	log.Println("=================================")
 
 	err = server.ListenAndServe()

@@ -7,11 +7,14 @@ import {
   Sparkles,
   TrendingUp,
 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useLowestProductPrice } from "../../hooks/useLowestProductPrice";
+import { formatIDR } from "../../utils/format";
 
 const stats = [
   { value: "99,9%", label: "Uptime guarantee" },
   { value: "0,05s", label: "Kecepatan load" },
-  { value: "2.500+", label: "Website aktif" },
+  { value: "50+", label: "Website aktif" },
   { value: "24/7", label: "Dukungan teknis" },
 ];
 
@@ -78,9 +81,8 @@ function ControlPanelMockup() {
               (item, i) => (
                 <div
                   key={item}
-                  className={`rounded-lg px-3 py-2 text-xs font-semibold ${
-                    i === 0 ? "bg-brand-600 text-white" : "text-slate-500"
-                  }`}
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold ${i === 0 ? "bg-brand-600 text-white" : "text-slate-500"
+                    }`}
                 >
                   {item}
                 </div>
@@ -159,6 +161,8 @@ function ControlPanelMockup() {
 }
 
 export default function Hero() {
+  const lowestPrice = useLowestProductPrice();
+
   return (
     <section id="beranda" className="relative overflow-hidden">
       {/* Background decor */}
@@ -196,13 +200,13 @@ export default function Hero() {
           </p>
 
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <a
-              href="#harga"
+            <Link
+              to="/register"
               className="group inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-brand-600 to-brand-500 px-7 py-3.5 text-base font-bold text-white shadow-xl shadow-brand-600/30 transition hover:shadow-2xl hover:shadow-brand-600/40 hover:brightness-110 sm:w-auto"
             >
               Mulai Hosting Sekarang
               <ArrowRight className="h-5 w-5 transition group-hover:translate-x-1" />
-            </a>
+            </Link>
             <a
               href="#harga"
               className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-7 py-3.5 text-base font-bold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50 sm:w-auto"
@@ -214,9 +218,12 @@ export default function Hero() {
             </a>
           </div>
 
-          <p className="mt-5 text-sm font-medium text-slate-500">
-            Mulai dari Rp25.000/bulan · Domain gratis · Migrasi gratis dari penyedia lain
-          </p>
+          {lowestPrice != null && (
+            <p className="mt-5 text-sm font-medium text-slate-500">
+              Mulai dari {formatIDR(lowestPrice)}/bulan · Domain gratis · Migrasi gratis dari
+              penyedia lain
+            </p>
+          )}
         </div>
 
         {/* Mockup */}
