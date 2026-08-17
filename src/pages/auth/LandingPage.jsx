@@ -3,7 +3,7 @@ import Hero from "../../components/landing/Hero";
 import LogoMarquee from "../../components/landing/LogoMarquee";
 import Features from "../../components/landing/Features";
 import HowItWorks from "../../components/landing/HowItWorks";
-import Pricing from "../../components/landing/Pricing";
+import Products from "../../components/landing/Products";
 import Testimonials from "../../components/landing/Testimonials";
 import FAQ from "../../components/landing/FAQ";
 import CTA from "../../components/landing/CTA";
@@ -18,7 +18,7 @@ export default function LandingPage() {
         <LogoMarquee />
         <Features />
         <HowItWorks />
-        <Pricing />
+        <Products />
         <Testimonials />
         <FAQ />
         <CTA />

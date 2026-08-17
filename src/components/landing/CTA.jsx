@@ -1,7 +1,11 @@
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useLowestProductPrice } from "../../hooks/useLowestProductPrice";
+import { formatIDR } from "../../utils/format";
 
 export default function CTA() {
+  const lowestPrice = useLowestProductPrice();
+
   return (
     <section className="bg-white pb-20 sm:pb-28">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -16,8 +20,9 @@ export default function CTA() {
               Siap Membuat Website Cepat &amp; Selalu Online?
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-white/85">
-              Website cepat, aman, dan uptime 99,9% dimulai dari Rp25.000/bulan — lengkap dengan
-              SSL gratis dan dukungan 24/7.
+              {lowestPrice != null
+                ? `Website cepat, aman, dan uptime 99,9% dimulai dari ${formatIDR(lowestPrice)}/bulan — lengkap dengan SSL gratis dan dukungan 24/7.`
+                : "Website cepat, aman, dan uptime 99,9% — lengkap dengan SSL gratis dan dukungan 24/7."}
             </p>
 
             <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">

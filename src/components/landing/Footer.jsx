@@ -1,18 +1,42 @@
+import { Link } from "react-router-dom";
 import { Zap } from "lucide-react";
 
 const columns = [
   {
     title: "Produk",
-    links: ["Fitur", "Harga", "Integrasi", "Changelog", "Status Sistem"],
+    links: [
+      { label: "Fitur", to: "/#fitur" },
+      { label: "Harga", to: "/#harga" },
+      { label: "Integrasi", to: "/integrasi" },
+      { label: "Changelog", to: "/changelog" },
+      { label: "Status Sistem", to: "/status-sistem" },
+    ],
   },
   {
     title: "Perusahaan",
-    links: ["Tentang Kami", "Blog", "Karir", "Kontak"],
+    links: [
+      { label: "Tentang Kami", to: "/tentang-kami" },
+      { label: "Blog", to: "/blog" },
+      { label: "Karir", to: "/karir" },
+      { label: "Kontak", to: "/kontak" },
+    ],
   },
   {
     title: "Bantuan",
-    links: ["Pusat Bantuan", "Dokumentasi", "Panduan API", "Komunitas"],
+    links: [
+      { label: "Pusat Bantuan", to: "/pusat-bantuan" },
+      { label: "Dokumentasi", to: "/dokumentasi" },
+      { label: "Panduan API", to: "/panduan-api" },
+      { label: "Komunitas", to: "/komunitas" },
+    ],
   },
+];
+
+const socials = [
+  { name: "x", href: "https://x.com" },
+  { name: "instagram", href: "https://instagram.com" },
+  { name: "linkedin", href: "https://linkedin.com" },
+  { name: "github", href: "https://github.com" },
 ];
 
 function SocialIcon({ name }) {
@@ -39,28 +63,30 @@ export default function Footer() {
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="grid gap-12 lg:grid-cols-12">
           <div className="lg:col-span-4">
-            <a href="#beranda" className="flex items-center gap-2.5">
+            <Link to="/" className="flex items-center gap-2.5">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-brand-400 shadow-lg shadow-brand-600/30">
                 <Zap className="h-5 w-5 text-white" fill="currentColor" strokeWidth={0} />
               </span>
               <span className="text-xl font-extrabold tracking-tight text-slate-900">
                 Host<span className="text-brand-600">Flow</span>
               </span>
-            </a>
+            </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-slate-500">
               Web hosting cepat dan handal dengan server NVMe, LiteSpeed, SSL gratis, backup
               harian, dan dukungan teknis 24/7.
             </p>
 
             <div className="mt-6 flex gap-3">
-              {["x", "instagram", "linkedin", "github"].map((name) => (
+              {socials.map((social) => (
                 <a
-                  key={name}
-                  href="#beranda"
-                  aria-label={name}
+                  key={social.name}
+                  href={social.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={social.name}
                   className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-600"
                 >
-                  <SocialIcon name={name} />
+                  <SocialIcon name={social.name} />
                 </a>
               ))}
             </div>
@@ -73,13 +99,13 @@ export default function Footer() {
               </h4>
               <ul className="mt-4 space-y-3">
                 {column.links.map((link) => (
-                  <li key={link}>
-                    <a
-                      href="#beranda"
+                  <li key={link.label}>
+                    <Link
+                      to={link.to}
                       className="text-sm font-medium text-slate-500 transition hover:text-brand-600"
                     >
-                      {link}
-                    </a>
+                      {link.label}
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -92,12 +118,12 @@ export default function Footer() {
             © 2026 HostFlow. Semua hak dilindungi.
           </p>
           <div className="flex gap-6 text-sm font-medium text-slate-400">
-            <a href="#beranda" className="transition hover:text-brand-600">
+            <Link to="/kebijakan-privasi" className="transition hover:text-brand-600">
               Kebijakan Privasi
-            </a>
-            <a href="#beranda" className="transition hover:text-brand-600">
+            </Link>
+            <Link to="/syarat-ketentuan" className="transition hover:text-brand-600">
               Syarat &amp; Ketentuan
-            </a>
+            </Link>
           </div>
         </div>
       </div>

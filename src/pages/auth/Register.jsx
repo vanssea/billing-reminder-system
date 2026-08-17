@@ -1,15 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { plans } from "../../data/plans";
+import { getProducts } from "../../services/productApi";
 
-const formatIDR = (value) => "Rp" + value.toLocaleString("id-ID");
+const formatIDR = (value) => "Rp" + Number(value).toLocaleString("id-ID");
 
 export default function Register() {
   const [params] = useSearchParams();
-  const initialPlan = plans.find(
-    (p) => p.name.toLowerCase() === (params.get("plan") || "").toLowerCase()
-  );
-  const [selectedPlan, setSelectedPlan] = useState(initialPlan || null);
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [loadingPlan, setLoadingPlan] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,6 +20,24 @@ export default function Register() {
     e.preventDefault();
     console.log({ name, email, password, confirmPassword, agreed, plan: selectedPlan?.name || null });
   };
+
+  useEffect(() => {
+    const planParam = (params.get("plan") || "").toLowerCase();
+
+    if (!planParam) {
+      return;
+    }
+
+    getProducts()
+      .then((data) => {
+        const active = data.filter((p) => p.status.toUpperCase() === "ACTIVE");
+        setSelectedPlan(
+          active.find((p) => p.name.toLowerCase() === planParam) || null
+        );
+      })
+      .catch(() => setSelectedPlan(null))
+      .finally(() => setLoadingPlan(false));
+  }, [params]);
 
   return (
     <div className="flex min-h-screen bg-[#fcf8ff]">
@@ -109,6 +125,12 @@ export default function Register() {
             Daftar untuk mulai mengelola billing hosting Anda.
           </p>
 
+          {loadingPlan && (params.get("plan") || "") && (
+            <div className="mt-6 rounded-lg border border-[#c7c4d8] bg-white p-4 text-sm text-[#464555]">
+              Memuat paket...
+            </div>
+          )}
+
           {selectedPlan && (
             <div className="mt-6 flex items-start gap-3 rounded-lg border border-[#3525cd]/30 bg-[#eef0ff] p-4">
               <span className="material-symbols-outlined mt-0.5 text-[20px] text-[#3525cd]">
@@ -120,7 +142,7 @@ export default function Register() {
                   Anda memilih paket {selectedPlan.name}
                 </p>
                 <p className="mt-0.5 text-xs text-[#464555]">
-                  {selectedPlan.tagline} · {formatIDR(selectedPlan.monthly)}/bulan
+                  {selectedPlan.description} · {formatIDR(selectedPlan.price)}/bulan
                 </p>
               </div>
 

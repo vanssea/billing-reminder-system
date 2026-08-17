@@ -3,23 +3,23 @@ import { Link } from "react-router-dom";
 import { Menu, X, Zap } from "lucide-react";
 
 const navLinks = [
-  { label: "Fitur", href: "#fitur" },
-  { label: "Cara Mulai", href: "#cara-kerja" },
-  { label: "Harga", href: "#harga" },
-  { label: "Testimoni", href: "#testimoni" },
-  { label: "FAQ", href: "#faq" },
+  { label: "Fitur", to: "/#fitur" },
+  { label: "Cara Mulai", to: "/#cara-kerja" },
+  { label: "Harga", to: "/#harga" },
+  { label: "Testimoni", to: "/#testimoni" },
+  { label: "FAQ", to: "/#faq" },
 ];
 
 function Logo({ className = "" }) {
   return (
-    <a href="#beranda" className={`flex items-center gap-2.5 ${className}`}>
+    <Link to="/" className={`flex items-center gap-2.5 ${className}`}>
       <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-brand-400 shadow-lg shadow-brand-600/30">
         <Zap className="h-5 w-5 text-white" fill="currentColor" strokeWidth={0} />
       </span>
       <span className="text-xl font-extrabold tracking-tight text-slate-900">
         Host<span className="text-brand-600">Flow</span>
       </span>
-    </a>
+    </Link>
   );
 }
 
@@ -33,13 +33,13 @@ export default function Navbar() {
 
         <div className="hidden items-center gap-8 lg:flex">
           {navLinks.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
+            <Link
+              key={link.to}
+              to={link.to}
               className="text-sm font-semibold text-slate-600 transition hover:text-brand-600"
             >
               {link.label}
-            </a>
+            </Link>
           ))}
         </div>
 
@@ -72,14 +72,14 @@ export default function Navbar() {
         <div className="border-t border-slate-200/70 bg-white px-4 pb-6 pt-3 lg:hidden">
           <div className="flex flex-col gap-1">
             {navLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
+              <Link
+                key={link.to}
+                to={link.to}
                 onClick={() => setOpen(false)}
                 className="rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-brand-50 hover:text-brand-600"
               >
                 {link.label}
-              </a>
+              </Link>
             ))}
           </div>
           <div className="mt-4 flex flex-col gap-2.5">

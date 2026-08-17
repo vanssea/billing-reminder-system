@@ -1,41 +1,25 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
-
-const faqs = [
-  {
-    question: "Apakah migrasi dari penyedia hosting lain gratis?",
-    answer:
-      "Ya, migrasi website Anda dari penyedia lain sepenuhnya gratis dan dikerjakan oleh tim kami tanpa downtime. Kami akan memindahkan file, database, dan konfigurasi email Anda dengan aman.",
-  },
-  {
-    question: "Bagaimana cara mendapatkan domain gratis?",
-    answer:
-      "Setiap pembelian paket tahunan mendapatkan domain gratis selama satu tahun (ekstensi .com, .id, dan lainnya). Perpanjangan tahun berikutnya menggunakan harga normal yang transparan.",
-  },
-  {
-    question: "Berapa kecepatan dan uptime yang dijamin?",
-    answer:
-      "Kami menjamin uptime 99,9% per bulan melalui SLA tertulis. Dengan server NVMe SSD dan LiteSpeed, rata-rata waktu load website pelanggan berada di bawah 0,5 detik.",
-  },
-  {
-    question: "Apakah SSL sudah termasuk dalam semua paket?",
-    answer:
-      "Ya. SSL gratis otomatis terpasang di semua website pada semua paket, sehingga data dan koneksi pengunjung Anda selalu terenkripsi tanpa biaya tambahan.",
-  },
-  {
-    question: "Bagaimana sistem backup-nya?",
-    answer:
-      "Semua paket mencakup backup otomatis (harian untuk paket Pro dan Bisnis, mingguan untuk Starter). Anda dapat melakukan restore website dengan sekali klik kapan saja dari panel kontrol.",
-  },
-  {
-    question: "Bisakah saya upgrade paket di kemudian hari?",
-    answer:
-      "Tentu. Anda dapat upgrade atau downgrade paket kapan saja dari panel kontrol. Selisih biaya dihitung secara prorata otomatis, tanpa penalti.",
-  },
-];
+import { getFAQs } from "../../services/faqApi";
 
 export default function FAQ() {
+  const [faqs, setFaqs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [openIndex, setOpenIndex] = useState(0);
+
+  useEffect(() => {
+    getFAQs()
+      .then((data) =>
+        setFaqs(
+          data
+            .filter((f) => f.status.toUpperCase() === "ACTIVE")
+            .sort((a, b) => a.display_order - b.display_order)
+        )
+      )
+      .catch(() => setError("Gagal memuat daftar pertanyaan."))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <section id="faq" className="scroll-mt-24 bg-white py-20 sm:py-28">
@@ -52,48 +36,68 @@ export default function FAQ() {
           </p>
         </div>
 
-        <div className="mt-12 space-y-3">
-          {faqs.map((faq, i) => {
-            const isOpen = openIndex === i;
+        <div className="mt-12">
+          {loading && (
+            <p className="text-center text-sm font-medium text-slate-500">
+              Memuat pertanyaan...
+            </p>
+          )}
 
-            return (
-              <div
-                key={faq.question}
-                className={`overflow-hidden rounded-2xl border transition ${
-                  isOpen
-                    ? "border-brand-200 bg-brand-50/50 shadow-md shadow-brand-900/5"
-                    : "border-slate-200 bg-white hover:border-brand-200"
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => setOpenIndex(isOpen ? -1 : i)}
-                  className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left"
-                >
-                  <span className="text-base font-bold text-slate-900">{faq.question}</span>
-                  <span
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition ${
-                      isOpen ? "rotate-180 bg-brand-600 text-white" : "bg-slate-100 text-slate-500"
-                    }`}
-                  >
-                    <ChevronDown className="h-4 w-4" />
-                  </span>
-                </button>
+          {error && (
+            <p className="text-center text-sm font-medium text-rose-500">{error}</p>
+          )}
 
+          {!loading && !error && faqs.length === 0 && (
+            <p className="text-center text-sm font-medium text-slate-500">
+              Belum ada pertanyaan.
+            </p>
+          )}
+
+          <div className="space-y-3">
+            {faqs.map((faq, i) => {
+              const isOpen = openIndex === i;
+
+              return (
                 <div
-                  className={`grid transition-all duration-300 ${
-                    isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                  key={faq.id}
+                  className={`overflow-hidden rounded-2xl border transition ${
+                    isOpen
+                      ? "border-brand-200 bg-brand-50/50 shadow-md shadow-brand-900/5"
+                      : "border-slate-200 bg-white hover:border-brand-200"
                   }`}
                 >
-                  <div className="overflow-hidden">
-                    <p className="px-6 pb-6 text-sm leading-relaxed text-slate-600">
-                      {faq.answer}
-                    </p>
+                  <button
+                    type="button"
+                    onClick={() => setOpenIndex(isOpen ? -1 : i)}
+                    className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left"
+                  >
+                    <span className="text-base font-bold text-slate-900">{faq.question}</span>
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition ${
+                        isOpen
+                          ? "rotate-180 bg-brand-600 text-white"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </span>
+                  </button>
+
+                  <div
+                    className={`grid transition-all duration-300 ${
+                      isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                    }`}
+                  >
+                    <div className="overflow-hidden">
+                      <p className="px-6 pb-6 text-sm leading-relaxed text-slate-600">
+                        {faq.answer}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     </section>
