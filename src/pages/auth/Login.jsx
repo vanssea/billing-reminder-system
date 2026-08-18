@@ -84,15 +84,14 @@ export default function Login() {
         {/* Tagline */}
         <div className="relative">
           <h2 className="text-4xl font-bold leading-tight text-white">
-            Web Hosting Cepat,
+            Hosting Cepat,
             <br />
-            Aman &amp; Handal
+            Bisnis Tenang
           </h2>
 
           <p className="mt-6 max-w-md text-brand-100">
-            Server NVMe &amp; LiteSpeed, uptime 99,9%, SSL gratis, backup
-            harian, dan dukungan 24/7 — kelola tagihan Anda dalam satu
-            dashboard.
+            Server NVMe &amp; LiteSpeed, uptime 99,9%, SSL gratis, dan
+            dukungan 24/7.
           </p>
         </div>
 
@@ -244,7 +243,7 @@ export default function Login() {
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-[#777587] transition hover:text-brand-600"
                   >
                     <span className="material-symbols-outlined text-[20px]">
-                      {showPassword ? "visibility_off" : "visibility"}
+                      {showPassword ? "visibility" : "visibility_off"}
                     </span>
                   </button>
                 </div>
@@ -252,23 +251,16 @@ export default function Login() {
 
               {/* Remember & Lupa Password */}
               <div className="flex items-center justify-between">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={remember}
-                  onClick={() => setRemember(!remember)}
-                  className="flex cursor-pointer items-center gap-2.5 text-sm text-[#464555]"
-                >
-                  <span
-                    className={`relative h-6 w-11 shrink-0 rounded-full transition ${remember ? "bg-brand-600" : "bg-slate-300"}`}
-                  >
-                    <span
-                      className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${remember ? "translate-x-5" : ""}`}
-                    />
-                  </span>
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-[#464555]">
+                  <input
+                    type="checkbox"
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
+                    className="h-4 w-4 rounded border-[#c7c4d8] accent-brand-600"
+                  />
 
                   Ingat saya
-                </button>
+                </label>
 
                 <Link
                   to="/lupa-password"
