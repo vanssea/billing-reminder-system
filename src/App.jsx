@@ -1,8 +1,15 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import ScrollToTop from "./components/ScrollToTop";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { AuthProvider } from "./context/AuthContext";
 import LandingPage from "./pages/auth/LandingPage";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
+import LupaPassword from "./pages/auth/LupaPassword";
+import ResetPassword from "./pages/auth/ResetPassword";
+import ClientDashboard from "./pages/client/Dashboard";
+import AdminDashboard from "./pages/admin/Dashboard";
+import SuperAdminDashboard from "./pages/superadmin/Dashboard";
 import TentangKami from "./pages/static/TentangKami";
 import Blog from "./pages/static/Blog";
 import Karir from "./pages/static/Karir";
@@ -19,12 +26,38 @@ import SyaratKetentuan from "./pages/static/SyaratKetentuan";
 
 function App() {
   return (
-    <>
+    <AuthProvider>
       <ScrollToTop />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/lupa-password" element={<LupaPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/" element={<LandingPage />} />
+        <Route
+          path="/client/dashboard"
+          element={
+            <ProtectedRoute>
+              <ClientDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/dashboard"
+          element={
+            <ProtectedRoute>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/superadmin/dashboard"
+          element={
+            <ProtectedRoute>
+              <SuperAdminDashboard />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/tentang-kami" element={<TentangKami />} />
         <Route path="/blog" element={<Blog />} />
         <Route path="/karir" element={<Karir />} />
@@ -40,7 +73,7 @@ function App() {
         <Route path="/syarat-ketentuan" element={<SyaratKetentuan />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </>
+    </AuthProvider>
   );
 }
 
