@@ -10,6 +10,10 @@ import {
   KeyRound,
   AlertTriangle,
   Eye,
+  CheckCircle2,
+  Phone,
+  Mail,
+  CalendarDays,
 } from "lucide-react";
 
 import {
@@ -49,6 +53,7 @@ function FieldError({ field, errors }) {
 export default function AdminManagement() {
   const [admins, setAdmins] = useState([]);
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("ALL");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -113,9 +118,10 @@ export default function AdminManagement() {
           .includes(search.toLowerCase()) ||
         (admin.email || "").toLowerCase().includes(search.toLowerCase()) ||
         (admin.phone || "").toLowerCase().includes(search.toLowerCase());
-      return matchSearch;
+      const matchRole = roleFilter === "ALL" || admin.role === roleFilter;
+      return matchSearch && matchRole;
     });
-  }, [admins, search]);
+  }, [admins, search, roleFilter]);
 
   const openAdd = () => {
     setEditingId(null);
@@ -144,6 +150,10 @@ export default function AdminManagement() {
     if (!form.email.trim()) newErrors.email = "Email wajib diisi";
     else if (!form.email.includes("@"))
       newErrors.email = "Email harus mengandung @";
+
+    if (!form.phone.trim()) newErrors.phone = "Nomor telepon wajib diisi";
+    else if (form.phone.length < 10)
+      newErrors.phone = "Nomor telepon minimal 10 digit";
 
     if (!editingId) {
       if (!form.password) newErrors.password = "Password wajib diisi";
@@ -231,63 +241,108 @@ export default function AdminManagement() {
   return (
     <div className="min-h-screen bg-[#fcf8ff] pt-16 md:pl-[280px]">
       <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
-        {/* Header */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-[#191c1e]">Admin Management</h1>
-            <p className="mt-1 text-sm text-[#777587]">
-              Kelola akun admin pada sistem HostFlow.
-            </p>
+        {/* Banner */}
+        <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#3525cd] to-[#5b44f3] p-6 text-white shadow-lg">
+          {/* Decorative circles */}
+          <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
+          <div className="absolute -bottom-8 right-20 h-28 w-28 rounded-full bg-white/10" />
+          <div className="absolute right-40 -top-6 h-20 w-20 rounded-full bg-white/10" />
+          <div className="absolute -left-6 -bottom-6 h-24 w-24 rounded-full bg-white/10" />
+
+          <div className="relative flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-white/80">Super Admin Panel</p>
+              <h1 className="mt-1 text-2xl font-bold">Admin Management</h1>
+              <p className="mt-1 text-sm text-white/80">
+                Kelola akun admin pada sistem HostFlow.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={openAdd}
+              className="flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-[#3525cd] shadow-sm transition hover:bg-white/90"
+            >
+              <Plus className="h-4 w-4" />
+              Tambah Admin
+            </button>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {/* Total Admin */}
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#2563eb] to-[#3b82f6] p-5 text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg">
+            <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/10" />
+            <div className="absolute -bottom-4 right-12 h-16 w-16 rounded-full bg-white/10" />
+            <div className="absolute right-28 -top-4 h-12 w-12 rounded-full bg-white/10" />
+
+            <div className="relative flex items-start justify-between">
+              <div>
+                <p className="text-sm font-medium text-white/80">
+                  {stats[0].title}
+                </p>
+                <p className="mt-1 text-3xl font-bold tracking-tight">
+                  {stats[0].value}
+                </p>
+                <p className="mt-1 text-xs text-white/70">
+                  {stats[0].description}
+                </p>
+              </div>
+              <div className="rounded-xl bg-white/20 p-2.5">
+                <Users size={20} />
+              </div>
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={openAdd}
-            className="flex items-center gap-2 rounded-lg bg-[#3525cd] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#2a1db0]"
-          >
-            <Plus className="h-4 w-4" />
-            Tambah Admin
-          </button>
+          {/* Admin Ditambahkan Bulan Ini */}
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#f59e0b] to-[#fbbf24] p-5 text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg">
+            <div className="absolute -right-5 -top-5 h-20 w-20 rounded-full bg-white/10" />
+            <div className="absolute -bottom-6 right-16 h-14 w-14 rounded-full bg-white/10" />
+            <div className="absolute right-32 -top-3 h-10 w-10 rounded-full bg-white/10" />
+
+            <div className="relative flex items-start justify-between">
+              <div>
+                <p className="text-sm font-medium text-white/80">
+                  {stats[1].title}
+                </p>
+                <p className="mt-1 text-3xl font-bold tracking-tight">
+                  {stats[1].value}
+                </p>
+                <p className="mt-1 text-xs text-white/70">
+                  {stats[1].description}
+                </p>
+              </div>
+              <div className="rounded-xl bg-white/20 p-2.5">
+                <UserCheck size={20} />
+              </div>
+            </div>
+          </div>
         </div>
 
         {error && (
-          <div className="mb-6 flex items-start gap-2 rounded-lg border border-[#ba1a1a]/30 bg-[#ffdad6] px-4 py-3 text-sm font-medium text-[#ba1a1a]">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{error}</span>
+          <div className="mb-6 flex items-center gap-3 rounded-xl border border-red-200 bg-gradient-to-r from-red-50 to-red-100 px-4 py-3.5 shadow-sm">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-500">
+              <AlertTriangle size={16} />
+            </div>
+            <span className="text-sm font-medium text-red-700">{error}</span>
           </div>
         )}
 
         {success && (
-          <div className="mb-6 flex items-start gap-2 rounded-lg border border-[#10b981]/30 bg-[#d1fae5] px-4 py-3 text-sm font-medium text-[#0f9d6e]">
-            <UserCheck className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{success}</span>
+          <div className="mb-6 flex items-center gap-3 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100 px-4 py-3.5 shadow-sm">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-500">
+              <CheckCircle2 size={16} />
+            </div>
+            <span className="text-sm font-medium text-emerald-700">{success}</span>
           </div>
         )}
-
-        {/* Stats */}
-        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {stats.map((stat) => (
-            <div
-              key={stat.title}
-              className="rounded-xl border border-[#e0e3e5] bg-white p-5 shadow-sm"
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-[#777587]">{stat.title}</p>
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#f0ecf9] text-[#3525cd]">
-                  <stat.icon className="h-5 w-5" />
-                </div>
-              </div>
-              <p className="mt-2 text-2xl font-bold text-[#191c1e]">{stat.value}</p>
-              <p className="mt-1 text-xs text-[#9a97a9]">{stat.description}</p>
-            </div>
-          ))}
-        </div>
 
         {/* Table Card */}
         <div className="overflow-hidden rounded-xl border border-[#e0e3e5] bg-white shadow-sm">
           {/* Toolbar */}
-          <div className="flex flex-wrap items-center gap-3 border-b border-[#e0e3e5] p-4">
-            <div className="relative min-w-[220px] flex-1">
+          <div className="flex flex-col gap-4 border-b border-[#e0e3e5] p-4 lg:flex-row lg:items-center">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9a97a9]" />
               <input
                 type="text"
@@ -296,6 +351,21 @@ export default function AdminManagement() {
                 placeholder="Cari nama, email, atau telepon admin..."
                 className="w-full rounded-lg border border-[#c7c4d8] bg-white py-2 pl-9 pr-3 text-sm text-[#191c1e] outline-none transition focus:border-[#3525cd] focus:ring-2 focus:ring-[#3525cd]/20"
               />
+            </div>
+
+            <div className="flex flex-1 items-center gap-1 rounded-xl bg-[#f3f1f7] p-1">
+              {[{ key: "ALL", label: "Semua" }, { key: "ADMIN", label: "Admin" }, { key: "SUPERADMIN", label: "Super Admin" }].map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => setRoleFilter(s.key)}
+                  className={`flex-1 rounded-lg px-3.5 py-2 text-xs font-bold whitespace-nowrap transition ${
+                    roleFilter === s.key ? "bg-white text-[#3525cd] shadow-sm" : "text-[#8b8898] hover:text-[#464555]"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -388,31 +458,42 @@ export default function AdminManagement() {
 
         {/* Modal Tambah/Edit */}
         {modalOpen && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md rounded-xl border border-[#e0e3e5] bg-white shadow-xl">
-              <div className="flex items-center justify-between border-b border-[#e0e3e5] px-5 py-4">
-                <div>
-                  <h2 className="text-lg font-bold text-[#191c1e]">
-                    {editingId ? "Edit Admin" : "Tambah Admin"}
-                  </h2>
-                  <p className="text-xs text-[#777587]">
-                    {editingId
-                      ? "Perbarui data admin di bawah ini."
-                      : "Isi data admin baru untuk ditambahkan."}
-                  </p>
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md overflow-hidden rounded-2xl border border-[#e0e3e5] bg-white shadow-2xl">
+              {/* Header */}
+              <div className="relative bg-gradient-to-r from-[#3525cd] to-[#5b44f3] px-6 py-5 text-white">
+                <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-white/10" />
+                <div className="absolute -bottom-3 right-10 h-12 w-12 rounded-full bg-white/10" />
+
+                <div className="relative flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
+                    {editingId ? <Pencil size={18} /> : <Plus size={18} />}
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold">
+                      {editingId ? "Edit Admin" : "Tambah Admin"}
+                    </h2>
+                    <p className="text-xs text-white/80">
+                      {editingId
+                        ? "Perbarui data admin di bawah ini."
+                        : "Isi data admin baru untuk ditambahkan."}
+                    </p>
+                  </div>
                 </div>
+
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[#464555] transition hover:bg-[#eceef0]"
+                  className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-lg text-white/80 transition hover:bg-white/20 hover:text-white"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="space-y-4 px-5 py-5">
+              {/* Form */}
+              <div className="space-y-4 px-6 py-6">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-[#464555]">
+                  <label className="mb-1.5 block text-sm font-semibold text-[#464555]">
                     Nama Lengkap
                   </label>
                   <input
@@ -429,7 +510,7 @@ export default function AdminManagement() {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-[#464555]">
+                  <label className="mb-1.5 block text-sm font-semibold text-[#464555]">
                     Email
                   </label>
                   <input
@@ -446,7 +527,7 @@ export default function AdminManagement() {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-[#464555]">
+                  <label className="mb-1.5 block text-sm font-semibold text-[#464555]">
                     No. Telepon
                   </label>
                   <input
@@ -466,7 +547,7 @@ export default function AdminManagement() {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-[#464555]">
+                  <label className="mb-1.5 block text-sm font-semibold text-[#464555]">
                     Password
                   </label>
                   <input
@@ -487,7 +568,7 @@ export default function AdminManagement() {
                 </div>
 
                 {!editingId && (
-                  <div className="flex items-start gap-2 rounded-lg bg-[#f0ecf9] p-3 text-xs text-[#464555]">
+                  <div className="flex items-start gap-2 rounded-xl bg-gradient-to-r from-[#f0ecf9] to-[#e8e4fc] p-3 text-xs text-[#464555]">
                     <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-[#3525cd]" />
                     <p>
                       Simpan password ini dengan aman. Data admin akan disimpan
@@ -497,18 +578,19 @@ export default function AdminManagement() {
                 )}
               </div>
 
-              <div className="flex justify-end gap-2 border-t border-[#e0e3e5] px-5 py-4">
+              {/* Actions */}
+              <div className="flex justify-end gap-3 border-t border-[#e0e3e5] px-6 py-4">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="rounded-lg border border-[#c7c4d8] px-4 py-2 text-sm font-semibold text-[#464555] transition hover:bg-[#eceef0]"
+                  className="rounded-xl border border-[#c7c4d8] px-5 py-2.5 text-sm font-semibold text-[#464555] transition hover:bg-[#eceef0]"
                 >
                   Batal
                 </button>
                 <button
                   type="button"
                   onClick={handleSave}
-                  className="rounded-lg bg-[#3525cd] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2a1db0]"
+                  className="rounded-xl bg-gradient-to-r from-[#3525cd] to-[#5b44f3] px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:shadow-lg"
                 >
                   {editingId ? "Simpan Perubahan" : "Tambah Admin"}
                 </button>
@@ -519,98 +601,221 @@ export default function AdminManagement() {
 
         {/* Modal Konfirmasi Hapus */}
         {deleteTarget && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-sm rounded-xl border border-[#e0e3e5] bg-white p-5 shadow-xl">
-              <div className="flex flex-col items-center text-center">
-                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#ffdad6] text-[#ba1a1a]">
-                  <AlertTriangle className="h-7 w-7" />
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-[#e0e3e5] bg-white shadow-2xl">
+              {/* Header */}
+              <div className="relative bg-gradient-to-r from-[#dc2626] to-[#ef4444] px-6 py-5 text-white">
+                <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-white/10" />
+                <div className="absolute -bottom-3 right-10 h-12 w-12 rounded-full bg-white/10" />
+
+                <div className="relative flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
+                    <Trash2 size={18} />
+                  </div>
+                  <h2 className="text-lg font-bold">Hapus Admin?</h2>
                 </div>
 
-                <h2 className="text-lg font-bold text-[#191c1e]">Hapus Admin?</h2>
-
-                <p className="mt-2 text-sm text-[#777587]">
-                  Yakin ingin menghapus admin{" "}
-                  <span className="font-semibold text-[#191c1e]">
-                    "{deleteTarget.full_name}"
-                  </span>
-                  ? Tindakan ini tidak dapat dibatalkan.
-                </p>
-
-                <div className="mt-6 flex w-full gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDeleteTarget(null)}
-                    className="flex-1 rounded-lg border border-[#c7c4d8] px-4 py-2.5 text-sm font-semibold text-[#464555] transition hover:bg-[#eceef0]"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="button"
-                    onClick={confirmDelete}
-                    className="flex-1 rounded-lg bg-[#ba1a1a] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#9c1616]"
-                  >
-                    Hapus
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal Detail */}
-        {detailTarget && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md rounded-xl border border-[#e0e3e5] bg-white shadow-xl">
-              <div className="flex items-center justify-between border-b border-[#e0e3e5] px-5 py-4">
-                <div>
-                  <h2 className="text-lg font-bold text-[#191c1e]">Detail Admin</h2>
-                  <p className="text-xs text-[#777587]">
-                    Informasi lengkap admin pada sistem HostFlow.
-                  </p>
-                </div>
                 <button
                   type="button"
-                  onClick={() => setDetailTarget(null)}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[#464555] transition hover:bg-[#eceef0]"
+                  onClick={() => setDeleteTarget(null)}
+                  className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-lg text-white/80 transition hover:bg-white/20 hover:text-white"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="px-5 py-5">
-                <div className="mb-5 flex items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#e2dfff] text-base font-bold text-[#3525cd]">
-                    {initials(detailTarget.full_name)}
+              {/* Content */}
+              <div className="px-6 py-6">
+                <div className="mb-5 flex items-center gap-3 rounded-xl bg-[#fef2f2] p-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#fee2e2] text-[#dc2626]">
+                    <AlertTriangle size={20} />
                   </div>
+                  <p className="text-sm text-[#991b1b]">
+                    Yakin ingin menghapus admin{" "}
+                    <span className="font-bold">"{deleteTarget.full_name}"</span>
+                    ? Tindakan ini tidak dapat dibatalkan.
+                  </p>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3 border-t border-[#e0e3e5] px-6 py-4">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(null)}
+                  className="rounded-xl border border-[#c7c4d8] px-5 py-2.5 text-sm font-semibold text-[#464555] transition hover:bg-[#eceef0]"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDelete}
+                  className="rounded-xl bg-gradient-to-r from-[#dc2626] to-[#ef4444] px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:shadow-lg"
+                >
+                  Hapus
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Detail Admin */}
+        {detailTarget && (
+          <div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-[1px]"
+            onClick={() => setDetailTarget(null)}
+          >
+            <div
+              className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-[#e0e3e5] bg-white shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header Detail */}
+              <div className="relative overflow-hidden bg-gradient-to-r from-[#3525cd] via-[#4a3ae0] to-[#6d5cff] px-6 py-5 text-white">
+                <div className="absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/10" />
+                <div className="absolute right-16 bottom-[-34px] h-28 w-28 rounded-full bg-white/10" />
+                <div className="absolute -left-10 bottom-[-45px] h-28 w-28 rounded-full bg-white/[0.06]" />
+
+                <div className="relative flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20">
+                      <Users size={21} />
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold">{detailTarget.full_name}</p>
+                      <p className="text-sm text-white/75">Detail Admin</p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setDetailTarget(null)}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 text-white transition hover:bg-white/25"
+                    title="Tutup"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="relative mt-5 flex items-end justify-between gap-4">
                   <div>
-                    <p className="font-semibold text-[#191c1e]">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-white/70">
+                      ROLE
+                    </p>
+                    <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                      <span className="text-xs font-semibold text-white">
+                        {detailTarget.role || "ADMIN"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-[11px] uppercase tracking-wider text-white/70">
+                      BERGABUNG
+                    </p>
+                    <p className="mt-1 text-sm font-semibold">
+                      {toDate(detailTarget.created_at)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Detail Content */}
+              <div className="px-6 py-5">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-[#e7e5f4] bg-[#faf9ff] p-4">
+                    <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-[#3525cd]/10 text-[#3525cd]">
+                      <Users size={16} />
+                    </div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9a97a9]">
+                      Nama Lengkap
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-[#191c1e]">
                       {detailTarget.full_name}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-[#ccfbf1] bg-[#f0fdfa] p-4">
+                    <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-[#0d9488]/10 text-[#0d9488]">
+                      <Phone size={16} />
+                    </div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#64748b]">
+                      No. Telepon
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-[#191c1e]">
+                      {detailTarget.phone || "-"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-[#fecdd3] bg-[#fff1f2] p-4">
+                    <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-[#ef4444]/10 text-[#ef4444]">
+                      <Mail size={16} />
+                    </div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#64748b]">
+                      Email
+                    </p>
+                    <p
+                      className="mt-1 truncate text-sm font-bold text-[#191c1e]"
+                      title={detailTarget.email}
+                    >
+                      {detailTarget.email || "-"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-[#fde68a] bg-[#fffbeb] p-4">
+                    <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-[#f59e0b]/10 text-[#f59e0b]">
+                      <CalendarDays size={16} />
+                    </div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#92400e]">
+                      Tanggal Bergabung
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-[#191c1e]">
+                      {toDate(detailTarget.created_at)}
                     </p>
                   </div>
                 </div>
 
-                <dl className="space-y-3">
-                  {[
-                    ["Email", detailTarget.email],
-                    ["No. Telepon", detailTarget.phone || "-"],
-                    ["Bergabung", toDate(detailTarget.created_at)],
-                    ["Diperbarui", toDate(detailTarget.updated_at)],
-                  ].map(([label, value]) => (
-                    <div key={label} className="flex items-start justify-between gap-4">
-                      <dt className="text-sm text-[#777587]">{label}</dt>
-                      <dd className="text-right text-sm font-medium text-[#191c1e]">
-                        {value}
-                      </dd>
+                {/* Diperbarui */}
+                <div className="mt-3 rounded-xl border border-[#e7e5f4] bg-[#faf9ff] p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#3525cd]/10 text-[#3525cd]">
+                      <Pencil size={16} />
                     </div>
-                  ))}
-                </dl>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9a97a9]">
+                        Terakhir Diperbarui
+                      </p>
+                      <p className="mt-1 text-sm font-semibold leading-snug text-[#191c1e]">
+                        {toDate(detailTarget.updated_at)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ringkasan status */}
+                <div className="mt-3 overflow-hidden rounded-xl border border-[#e0e3e5]">
+                  <div className="flex items-center gap-3 bg-[#ecfdf5] px-4 py-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#10b981]/15 text-[#10b981]">
+                      <CheckCircle2 size={16} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-[#065f46]">
+                        Akun Aktif
+                      </p>
+                      <p className="text-[11px] text-[#059669]">
+                        Akses penuh ke sistem Admin
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex justify-end border-t border-[#e0e3e5] px-5 py-4">
+              {/* Footer */}
+              <div className="flex justify-end border-t border-[#e0e3e5] px-6 py-4">
                 <button
                   type="button"
                   onClick={() => setDetailTarget(null)}
-                  className="rounded-lg bg-[#3525cd] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2a1db0]"
+                  className="rounded-xl bg-gradient-to-r from-[#3525cd] to-[#5b44f3] px-6 py-2.5 text-sm font-semibold text-white shadow-md transition hover:shadow-lg"
                 >
                   Tutup
                 </button>

@@ -2,12 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Zap } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-
-const roleMap = {
-  SUPERADMIN: "/superadmin/dashboard",
-  ADMIN: "/admin/dashboard",
-  CLIENT: "/client/dashboard",
-};
+import { roleDashboard } from "../../utils/roles";
 
 export default function Login() {
   const { user, loading, signIn } = useAuth();
@@ -23,7 +18,7 @@ export default function Login() {
 
   useEffect(() => {
     if (!loading && user) {
-      navigate(roleMap[user.role] || "/", { replace: true });
+      navigate(roleDashboard[user.role] || "/", { replace: true });
     }
   }, [loading, user, navigate]);
 
@@ -44,7 +39,7 @@ export default function Login() {
     setSubmitting(true);
     try {
       const authUser = await signIn(email, password, remember);
-      navigate(roleMap[authUser.role] || "/", { replace: true });
+      navigate(roleDashboard[authUser.role] || "/", { replace: true });
     } catch {
       setError("Email atau password salah. Silakan coba lagi.");
     } finally {
