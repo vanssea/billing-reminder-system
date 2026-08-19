@@ -614,12 +614,24 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 		}
 	}
 
+	// Buat reminder otomatis untuk invoice yang dapat ditagihkan
+	// (DRAFT, PAID, CANCELLED tidak menghasilkan reminder)
+	if invoice.Status != "DRAFT" && invoice.Status != "PAID" && invoice.Status != "CANCELLED" {
+		err = CreateRemindersForInvoice(
+			context.Background(),
+			tx,
+			invoice.ID,
+			invoice.DueDate,
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	err = tx.Commit(context.Background())
 	if err != nil {
 		return nil, err
 	}
-
-	// Ambil seluruh data relasi setelah invoice berhasil dibuat
 	invoice.Items, err = s.fetchItems(invoice.ID)
 	if err != nil {
 		return nil, err
@@ -677,6 +689,17 @@ func (s *InvoiceService) UpdateInvoice(
 		return nil, err
 	}
 	defer tx.Rollback(context.Background())
+
+	// Simpan status sebelumnya untuk mendeteksi transisi keluar DRAFT
+	var previousStatus string
+	err = tx.QueryRow(
+		context.Background(),
+		`SELECT status FROM invoices WHERE id = $1`,
+		id,
+	).Scan(&previousStatus)
+	if err != nil {
+		return nil, err
+	}
 
 	var subtotal float64
 
@@ -811,6 +834,24 @@ func (s *InvoiceService) UpdateInvoice(
 			ei.subtotal,
 		)
 
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Reminder dibuat hanya saat invoice pertama kali keluar dari DRAFT
+	// menuju status aktif (bukan DRAFT/PAID/CANCELLED).
+	if previousStatus == "DRAFT" &&
+		invoice.Status != "DRAFT" &&
+		invoice.Status != "PAID" &&
+		invoice.Status != "CANCELLED" {
+
+		err = CreateRemindersForInvoice(
+			context.Background(),
+			tx,
+			invoice.ID,
+			invoice.DueDate,
+		)
 		if err != nil {
 			return nil, err
 		}

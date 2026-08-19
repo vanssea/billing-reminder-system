@@ -33,6 +33,8 @@ func main() {
 	testimonialService := services.NewTestimonialService(db)
 	faqService := services.NewFAQService(db)
 	authService := services.NewAuthService(db)
+	invoiceService := services.NewInvoiceService(db)
+	reminderService := services.NewReminderService(db)
 
 	// Membuat handler
 	clientHandler := handlers.NewClientHandler(clientService)
@@ -41,6 +43,8 @@ func main() {
 	testimonialHandler := handlers.NewTestimonialHandler(testimonialService)
 	faqHandler := handlers.NewFAQHandler(faqService)
 	authHandler := handlers.NewAuthHandler(authService)
+	invoiceHandler := handlers.NewInvoiceHandler(invoiceService)
+	reminderHandler := handlers.NewReminderHandler(reminderService)
 
 	// Setup router
 	router := chi.NewRouter()
@@ -75,6 +79,8 @@ func main() {
 	routes.TestimonialRoutes(router, testimonialHandler)
 	routes.FAQRoutes(router, faqHandler)
 	routes.AuthRoutes(router, authHandler)
+	routes.InvoiceRoutes(router, invoiceHandler)
+	routes.ReminderRoutes(router, reminderHandler)
 
 	// Menjalankan server
 	server := &http.Server{
@@ -94,6 +100,8 @@ func main() {
 	log.Println("API Testimonials: http://localhost:8080/api/testimonials")
 	log.Println("API FAQs: http://localhost:8080/api/faqs")
 	log.Println("API Auth: http://localhost:8080/api/auth/me")
+	log.Println("API Invoices: http://localhost:8080/api/invoices")
+	log.Println("API Reminders: http://localhost:8080/api/reminders")
 	log.Println("=================================")
 
 	err = server.ListenAndServe()
