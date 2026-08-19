@@ -94,15 +94,14 @@ export default function LupaPassword() {
         {/* Tagline */}
         <div className="relative">
           <h2 className="text-4xl font-bold leading-tight text-white">
-            Web Hosting Cepat,
+            Akun Anda,
             <br />
-            Aman &amp; Handal
+            Tetap Aman
           </h2>
 
           <p className="mt-6 max-w-md text-brand-100">
-            Server NVMe &amp; LiteSpeed, uptime 99,9%, SSL gratis, backup
-            harian, dan dukungan 24/7 — kelola tagihan Anda dalam satu
-            dashboard.
+            Server NVMe &amp; LiteSpeed, uptime 99,9%, SSL gratis, dan
+            dukungan 24/7.
           </p>
         </div>
 

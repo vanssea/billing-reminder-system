@@ -7,5 +7,6 @@ import (
 )
 
 func AuthRoutes(router *chi.Mux, authHandler *handlers.AuthHandler) {
+	router.Post("/api/auth/register", authHandler.Register)
 	router.Get("/api/auth/me", authHandler.Me)
 }

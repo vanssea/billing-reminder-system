@@ -195,7 +195,7 @@ export default function ResetPassword() {
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-[#777587] transition hover:text-brand-600"
               >
                 <span className="material-symbols-outlined text-[20px]">
-                  {showPassword ? "visibility_off" : "visibility"}
+                  {showPassword ? "visibility" : "visibility_off"}
                 </span>
               </button>
             </div>
@@ -243,7 +243,7 @@ export default function ResetPassword() {
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-[#777587] transition hover:text-brand-600"
               >
                 <span className="material-symbols-outlined text-[20px]">
-                  {showConfirmPassword ? "visibility_off" : "visibility"}
+                  {showConfirmPassword ? "visibility" : "visibility_off"}
                 </span>
               </button>
             </div>
@@ -297,15 +297,14 @@ export default function ResetPassword() {
         {/* Tagline */}
         <div className="relative">
           <h2 className="text-4xl font-bold leading-tight text-white">
-            Web Hosting Cepat,
+            Akun Anda,
             <br />
-            Aman &amp; Handal
+            Tetap Aman
           </h2>
 
           <p className="mt-6 max-w-md text-brand-100">
-            Server NVMe &amp; LiteSpeed, uptime 99,9%, SSL gratis, backup
-            harian, dan dukungan 24/7 — kelola tagihan Anda dalam satu
-            dashboard.
+            Server NVMe &amp; LiteSpeed, uptime 99,9%, SSL gratis, dan
+            dukungan 24/7.
           </p>
         </div>
 
