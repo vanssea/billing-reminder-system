@@ -9,6 +9,7 @@ import LupaPassword from "./pages/auth/LupaPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 import ClientDashboard from "./pages/client/Dashboard";
 import AdminDashboard from "./pages/admin/Dashboard";
+import AdminClients from "./pages/admin/Clients"; // <-- INI IMPORT BARUNYA
 import SuperAdminDashboard from "./pages/superadmin/Dashboard";
 import TentangKami from "./pages/static/TentangKami";
 import Blog from "./pages/static/Blog";
@@ -34,6 +35,7 @@ function App() {
         <Route path="/lupa-password" element={<LupaPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/" element={<LandingPage />} />
+        
         <Route
           path="/client/dashboard"
           element={
@@ -42,6 +44,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        
         <Route
           path="/admin/dashboard"
           element={
@@ -50,6 +53,16 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route
+          path="/admin/clients"
+          element={
+            <ProtectedRoute>
+              <AdminClients />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/superadmin/dashboard"
           element={
@@ -58,6 +71,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        
         <Route path="/tentang-kami" element={<TentangKami />} />
         <Route path="/blog" element={<Blog />} />
         <Route path="/karir" element={<Karir />} />
@@ -71,6 +85,7 @@ function App() {
         <Route path="/komunitas" element={<Komunitas />} />
         <Route path="/kebijakan-privasi" element={<KebijakanPrivasi />} />
         <Route path="/syarat-ketentuan" element={<SyaratKetentuan />} />
+        
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AuthProvider>
