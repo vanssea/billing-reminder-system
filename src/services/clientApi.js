@@ -1,22 +1,25 @@
 const API_URL = "http://localhost:8080/api/clients";
+const ADMIN_API_URL = "http://localhost:8080/api/admin/clients";
 
-export async function getClients() {
-  const response = await fetch(API_URL);
-
-  if (!response.ok) {
-    throw new Error("Gagal mengambil data client");
+export async function getClients(page, limit, search, status) {
+  // Jika dipanggil dari halaman Admin kamu (ada isian parameternya)
+  if (page !== undefined) {
+    const query = new URLSearchParams({ page, limit, search, status });
+    const response = await fetch(`${ADMIN_API_URL}?${query}`);
+    if (!response.ok) throw new Error("Gagal mengambil data client");
+    return response.json();
   }
 
+  const response = await fetch(API_URL);
+  if (!response.ok) throw new Error("Gagal mengambil data client");
   return response.json();
 }
 
 export async function getClientById(id) {
   const response = await fetch(`${API_URL}/${id}`);
-
   if (!response.ok) {
     throw new Error("Client tidak ditemukan");
   }
-
   return response.json();
 }
 
@@ -28,12 +31,10 @@ export async function createClient(data) {
     },
     body: JSON.stringify(data),
   });
-
   if (!response.ok) {
     const message = await response.text();
     throw new Error(message || "Gagal membuat client");
   }
-
   return response.json();
 }
 
@@ -45,12 +46,10 @@ export async function updateClient(id, data) {
     },
     body: JSON.stringify(data),
   });
-
   if (!response.ok) {
     const message = await response.text();
     throw new Error(message || "Gagal mengupdate client");
   }
-
   return response.json();
 }
 
@@ -58,11 +57,25 @@ export async function deleteClient(id) {
   const response = await fetch(`${API_URL}/${id}`, {
     method: "DELETE",
   });
-
   if (!response.ok) {
     const message = await response.text();
     throw new Error(message || "Gagal menghapus client");
   }
-
   return true;
+}
+
+export async function updateClientStatus(id, status) {
+  const response = await fetch(`${ADMIN_API_URL}/${id}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Gagal mengupdate status client");
+  }
+  
+  if (response.status === 204) return null;
+  return response.json();
 }
