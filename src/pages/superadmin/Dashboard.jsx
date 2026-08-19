@@ -749,15 +749,18 @@ export default function SuperAdminDashboard() {
       {/* Main Content */}
       <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
         {/* Header */}
-        <div className="mb-8">
+        <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#3525cd] to-[#5b44f3] p-6 text-white shadow-lg">
+          <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
+          <div className="absolute -bottom-8 right-20 h-28 w-28 rounded-full bg-white/10" />
+          <div className="absolute right-40 -top-6 h-20 w-20 rounded-full bg-white/10" />
 
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            Dashboard
-          </h1>
-
-          <p className="mt-1 text-sm text-slate-500">
-            Overview of your hosting business and billing activity.
-          </p>
+          <div className="relative">
+            <p className="text-sm font-medium text-white/80">Super Admin Panel</p>
+            <h1 className="mt-1 text-2xl font-bold">Dashboard</h1>
+            <p className="mt-1 text-sm text-white/80">
+              Overview of your hosting business and billing activity.
+            </p>
+          </div>
         </div>
 
         {/* Statistics */}

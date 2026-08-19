@@ -27,24 +27,13 @@ type Payment struct {
 	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
-type Reminder struct {
-	ID           string     `json:"id"`
-	InvoiceID    string     `json:"invoice_id"`
-	ReminderType string     `json:"reminder_type"`
-	ScheduledAt  *time.Time `json:"scheduled_at,omitempty"`
-	SentAt       *time.Time `json:"sent_at,omitempty"`
-	Status       string     `json:"status"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
-}
-
 type ActivityLog struct {
-	ID          string     `json:"id"`
-	InvoiceID   string     `json:"invoice_id"`
-	ActorType   string     `json:"actor_type"`
-	Action      string     `json:"action"`
-	Description string     `json:"description"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID          string    `json:"id"`
+	InvoiceID   string    `json:"invoice_id"`
+	ActorType   string    `json:"actor_type"`
+	Action      string    `json:"action"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type Invoice struct {
