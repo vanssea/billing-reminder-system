@@ -23,6 +23,7 @@ export default function Testimonials() {
           data
             .filter((t) => t.status.toUpperCase() === "ACTIVE")
             .sort((a, b) => a.display_order - b.display_order)
+            .slice(0, 6)
         )
       )
       .catch(() => setError("Gagal memuat testimoni."))

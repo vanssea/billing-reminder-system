@@ -5,7 +5,10 @@ import { getProducts } from "../../services/productApi";
 import { formatIDR } from "../../utils/format";
 
 const isMonthly = (product) =>
-  !product.billing_type || product.billing_type.toLowerCase().includes("bulan");
+  !product.billing_type ||
+  ["bulan", "month"].some((key) =>
+    product.billing_type.toLowerCase().includes(key)
+  );
 
 const discountPct = (product) =>
   product.price_yearly != null
@@ -121,7 +124,7 @@ export default function Products() {
                 </div>
                 <p className="mt-1 text-xs font-medium text-slate-400">
                   {yearly
-                    ? `Dibayar per tahun (hemat ${discountPct(product)}%)`
+                    ? `Hemat ${discountPct(product)}% dengan komitmen tahunan`
                     : "Dibayar bulanan, batalkan kapan saja"}
                 </p>
 

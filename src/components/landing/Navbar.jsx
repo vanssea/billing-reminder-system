@@ -54,7 +54,7 @@ export default function Navbar() {
             to="/register"
             className="rounded-full bg-gradient-to-r from-brand-600 to-brand-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-600/30 transition hover:shadow-xl hover:shadow-brand-600/40 hover:brightness-110"
           >
-            Coba Gratis
+            Daftar Gratis
           </Link>
         </div>
 
@@ -95,7 +95,7 @@ export default function Navbar() {
               onClick={() => setOpen(false)}
               className="rounded-full bg-gradient-to-r from-brand-600 to-brand-500 px-5 py-2.5 text-center text-sm font-bold text-white shadow-lg shadow-brand-600/30"
             >
-              Coba Gratis
+              Daftar Gratis
             </Link>
           </div>
         </div>
