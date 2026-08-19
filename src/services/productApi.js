@@ -1,4 +1,5 @@
 const API_URL = "http://localhost:8080/api/products";
+const ADMIN_PRODUCT_API_URL = "http://localhost:8080/api/admin/products";
 
 export async function getProducts() {
   const response = await fetch(API_URL);
@@ -65,4 +66,37 @@ export async function deleteProduct(id) {
   }
 
   return true;
+}
+// ==========================================
+// FUNGSI TAMBAHAN KHUSUS UNTUK ADMIN PRODUCT
+// ==========================================
+export async function updateProductStatus(id, newStatus) {
+  // 1. Ambil data produk yang ada saat ini berdasarkan ID-nya
+  const getResponse = await fetch(`${API_URL}/${id}`);
+  if (!getResponse.ok) {
+    throw new Error("Gagal mengambil data produk untuk update status");
+  }
+  const currentProduct = await getResponse.json();
+
+  // 2. Gabungkan data lama dengan status baru yang ingin diubah
+  const updatedPayload = {
+    ...currentProduct,
+    status: newStatus,
+  };
+
+  // 3. Kirim kembali seluruh data lengkap ke endpoint PUT
+  const response = await fetch(`${API_URL}/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(updatedPayload),
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Gagal mengubah status produk");
+  }
+
+  return response.json();
 }

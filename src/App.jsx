@@ -9,7 +9,8 @@ import LupaPassword from "./pages/auth/LupaPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 import ClientDashboard from "./pages/client/Dashboard";
 import AdminDashboard from "./pages/admin/Dashboard";
-import AdminClients from "./pages/admin/Clients"; // <-- INI IMPORT BARUNYA
+import AdminClients from "./pages/admin/Clients";
+import AdminProducts from "./pages/admin/Products"; // <-- IMPORT HALAMAN PRODUK
 import SuperAdminDashboard from "./pages/superadmin/Dashboard";
 import TentangKami from "./pages/static/TentangKami";
 import Blog from "./pages/static/Blog";
@@ -59,6 +60,15 @@ function App() {
           element={
             <ProtectedRoute>
               <AdminClients />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/products"
+          element={
+            <ProtectedRoute>
+              <AdminProducts />
             </ProtectedRoute>
           }
         />
