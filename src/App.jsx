@@ -14,6 +14,7 @@ import ResetPassword from "./pages/auth/ResetPassword";
 import ClientDashboard from "./pages/client/Dashboard";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminClients from "./pages/admin/Clients";
+import AdminProducts from "./pages/admin/Products"; // <-- IMPORT HALAMAN PRODUK
 import SuperAdminDashboard from "./pages/superadmin/Dashboard";
 
 // Static Pages
@@ -70,6 +71,15 @@ function App() {
           element={
             <ProtectedRoute>
               <AdminClients />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/products"
+          element={
+            <ProtectedRoute>
+              <AdminProducts />
             </ProtectedRoute>
           }
         />
