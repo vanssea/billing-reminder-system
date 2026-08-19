@@ -1,6 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { getProducts } from "../../services/productApi";
+
+const formatIDR = (value) => "Rp" + Number(value).toLocaleString("id-ID");
 
 export default function Register() {
+  const [params] = useSearchParams();
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [loadingPlan, setLoadingPlan] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -11,8 +18,26 @@ export default function Register() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    console.log({ name, email, password, confirmPassword, agreed });
+    console.log({ name, email, password, confirmPassword, agreed, plan: selectedPlan?.name || null });
   };
+
+  useEffect(() => {
+    const planParam = (params.get("plan") || "").toLowerCase();
+
+    if (!planParam) {
+      return;
+    }
+
+    getProducts()
+      .then((data) => {
+        const active = data.filter((p) => p.status.toUpperCase() === "ACTIVE");
+        setSelectedPlan(
+          active.find((p) => p.name.toLowerCase() === planParam) || null
+        );
+      })
+      .catch(() => setSelectedPlan(null))
+      .finally(() => setLoadingPlan(false));
+  }, [params]);
 
   return (
     <div className="flex min-h-screen bg-[#fcf8ff]">
@@ -99,6 +124,37 @@ export default function Register() {
           <p className="mt-2 text-[#464555]">
             Daftar untuk mulai mengelola billing hosting Anda.
           </p>
+
+          {loadingPlan && (params.get("plan") || "") && (
+            <div className="mt-6 rounded-lg border border-[#c7c4d8] bg-white p-4 text-sm text-[#464555]">
+              Memuat paket...
+            </div>
+          )}
+
+          {selectedPlan && (
+            <div className="mt-6 flex items-start gap-3 rounded-lg border border-[#3525cd]/30 bg-[#eef0ff] p-4">
+              <span className="material-symbols-outlined mt-0.5 text-[20px] text-[#3525cd]">
+                verified
+              </span>
+
+              <div className="flex-1">
+                <p className="text-sm font-bold text-[#1b1b24]">
+                  Anda memilih paket {selectedPlan.name}
+                </p>
+                <p className="mt-0.5 text-xs text-[#464555]">
+                  {selectedPlan.description} · {formatIDR(selectedPlan.price)}/bulan
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedPlan(null)}
+                className="text-xs font-semibold text-[#3525cd] transition hover:underline"
+              >
+                Hapus
+              </button>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             {/* Nama Lengkap */}
@@ -252,9 +308,9 @@ export default function Register() {
           {/* Login */}
           <p className="mt-6 text-center text-sm text-[#464555]">
             Sudah punya akun?{" "}
-            <button className="font-medium text-[#3525cd] hover:underline">
+            <Link to="/login" className="font-medium text-[#3525cd] hover:underline">
               Masuk di sini
-            </button>
+            </Link>
           </p>
         </div>
       </div>

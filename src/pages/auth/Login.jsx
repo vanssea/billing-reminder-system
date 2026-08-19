@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -197,9 +198,9 @@ export default function Login() {
           {/* Daftar */}
           <p className="mt-6 text-center text-sm text-[#464555]">
             Belum punya akun?{" "}
-            <button className="font-medium text-[#3525cd] hover:underline">
+            <Link to="/register" className="font-medium text-[#3525cd] hover:underline">
               Daftar sekarang
-            </button>
+            </Link>
           </p>
         </div>
       </div>
