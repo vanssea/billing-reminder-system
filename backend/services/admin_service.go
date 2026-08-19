@@ -274,9 +274,16 @@ func (s *AdminService) DeleteAdmin(id string) error {
 		return fmt.Errorf("SUPABASE_URL atau SUPABASE_SERVICE_KEY belum diset")
 	}
 
-	// Hapus user dari Supabase Auth
-	url := fmt.Sprintf("%s/auth/v1/admin/users/%s", supabaseURL, id)
+	_, err := s.DB.Exec(
+		context.Background(),
+		`DELETE FROM profiles WHERE id = $1`,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("gagal menghapus profile: %w", err)
+	}
 
+	url := fmt.Sprintf("%s/auth/v1/admin/users/%s", supabaseURL, id)
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return err
@@ -286,7 +293,6 @@ func (s *AdminService) DeleteAdmin(id string) error {
 	req.Header.Set("Authorization", "Bearer "+secretKey)
 
 	client := &http.Client{}
-
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -295,24 +301,112 @@ func (s *AdminService) DeleteAdmin(id string) error {
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
-
-		return fmt.Errorf(
-			"gagal menghapus user dari Supabase Auth: status %d: %s",
-			resp.StatusCode,
-			string(body),
-		)
-	}
-
-	// Hapus profile
-	_, err = s.DB.Exec(
-		context.Background(),
-		`DELETE FROM profiles WHERE id = $1`,
-		id,
-	)
-
-	if err != nil {
-		return fmt.Errorf("gagal menghapus profile: %w", err)
+		return fmt.Errorf("gagal menghapus user dari Supabase Auth: status %d: %s", resp.StatusCode, string(body))
 	}
 
 	return nil
+}
+
+func (s *AdminService) GetDashboardSummary() (*models.DashboardSummary, error) {
+	summary := &models.DashboardSummary{
+		UpcomingInvoices:     []models.UpcomingInvoice{},
+		PendingVerifications: []models.PendingVerification{},
+	}
+
+	ctx := context.Background()
+
+	// 1. Ambil Statistik Angka (Stats)
+	statsQuery := `
+		SELECT
+			COUNT(id) as total_invoices,
+			COUNT(id) FILTER (WHERE status = 'PAID') as paid_invoices,
+			COUNT(id) FILTER (WHERE status = 'UNPAID') as unpaid_invoices,
+			COUNT(id) FILTER (WHERE status = 'OVERDUE') as overdue_invoices,
+			(SELECT COUNT(id) FROM payments WHERE status = 'PENDING') as pending_payments
+		FROM invoices
+	`
+	err := s.DB.QueryRow(ctx, statsQuery).Scan(
+		&summary.Stats.TotalInvoices,
+		&summary.Stats.PaidInvoices,
+		&summary.Stats.UnpaidInvoices,
+		&summary.Stats.OverdueInvoices,
+		&summary.Stats.PendingPayments,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("gagal mengambil stats: %w", err)
+	}
+
+	// 2. Ambil Upcoming Invoices (5 Terdekat yang belum lunas)
+	upcomingQuery := `
+		SELECT
+			i.invoice_number,
+			c.company_name,
+			TO_CHAR(i.due_date, 'DD Mon YYYY') as due_date,
+			i.total,
+			i.status
+		FROM invoices i
+		JOIN clients c ON i.client_id = c.id
+		WHERE i.status IN ('UNPAID', 'SENT', 'OVERDUE')
+		ORDER BY i.due_date ASC
+		LIMIT 5
+	`
+	rows, err := s.DB.Query(ctx, upcomingQuery)
+	if err != nil {
+		return nil, fmt.Errorf("gagal mengambil upcoming invoices: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var inv models.UpcomingInvoice
+		if err := rows.Scan(&inv.ID, &inv.Client, &inv.DueDate, &inv.Amount, &inv.Status); err != nil {
+			return nil, err
+		}
+		summary.UpcomingInvoices = append(summary.UpcomingInvoices, inv)
+	}
+
+	// 3. Ambil Pending Verifications (5 Pembayaran terbaru yang menunggu verifikasi)
+	pendingQuery := `
+		SELECT
+			c.company_name,
+			p.amount
+		FROM payments p
+		JOIN invoices i ON p.invoice_id = i.id
+		JOIN clients c ON i.client_id = c.id
+		WHERE p.status = 'PENDING'
+		ORDER BY p.created_at DESC
+		LIMIT 5
+	`
+	pRows, err := s.DB.Query(ctx, pendingQuery)
+	if err != nil {
+		return nil, fmt.Errorf("gagal mengambil pending verifications: %w", err)
+	}
+	defer pRows.Close()
+
+	for pRows.Next() {
+		var pv models.PendingVerification
+		if err := pRows.Scan(&pv.Client, &pv.Amount); err != nil {
+			return nil, err
+		}
+		summary.PendingVerifications = append(summary.PendingVerifications, pv)
+	}
+
+	// 4. Ambil Status Reminder Hari Ini (Menggunakan Timezone Asia/Jakarta)
+	reminderQuery := `
+		SELECT
+			COUNT(id) FILTER (WHERE status = 'PENDING') as scheduled,
+			COUNT(id) FILTER (WHERE status = 'SENT') as sent,
+			COUNT(id) FILTER (WHERE status = 'FAILED') as failed
+		FROM reminders
+		WHERE DATE(scheduled_at AT TIME ZONE 'Asia/Jakarta') = CURRENT_DATE
+	`
+	err = s.DB.QueryRow(ctx, reminderQuery).Scan(
+		&summary.RemindersToday.Scheduled,
+		&summary.RemindersToday.Sent,
+		&summary.RemindersToday.Failed,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("gagal mengambil reminders: %w", err)
+	}
+
+	return summary, nil
 }
