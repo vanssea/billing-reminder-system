@@ -246,6 +246,7 @@ func (s *InvoiceService) GetInvoices() ([]models.Invoice, error) {
 			client_id,
 			invoice_date,
 			due_date,
+			sent_at,
 			subtotal,
 			tax,
 			total,
@@ -273,6 +274,7 @@ func (s *InvoiceService) GetInvoices() ([]models.Invoice, error) {
 			&invoice.ClientID,
 			&invoice.InvoiceDate,
 			&invoice.DueDate,
+			&invoice.SentAt,
 			&invoice.Subtotal,
 			&invoice.Tax,
 			&invoice.Total,
@@ -362,6 +364,7 @@ func (s *InvoiceService) GetInvoiceByID(id string) (*models.Invoice, error) {
 			client_id,
 			invoice_date,
 			due_date,
+			sent_at,
 			subtotal,
 			tax,
 			total,
@@ -378,6 +381,7 @@ func (s *InvoiceService) GetInvoiceByID(id string) (*models.Invoice, error) {
 		&invoice.ClientID,
 		&invoice.InvoiceDate,
 		&invoice.DueDate,
+		&invoice.SentAt,
 		&invoice.Subtotal,
 		&invoice.Tax,
 		&invoice.Total,
@@ -538,6 +542,7 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 			client_id,
 			invoice_date,
 			due_date,
+			sent_at,
 			subtotal,
 			tax,
 			total,
@@ -545,13 +550,14 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 			notes,
 			created_by
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 		RETURNING
 			id,
 			invoice_number,
 			client_id,
 			invoice_date,
 			due_date,
+			sent_at,
 			subtotal,
 			tax,
 			total,
@@ -565,6 +571,7 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 		req.ClientID,
 		req.InvoiceDate,
 		req.DueDate,
+		nil,
 		subtotal,
 		tax,
 		total,
@@ -577,6 +584,7 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 		&invoice.ClientID,
 		&invoice.InvoiceDate,
 		&invoice.DueDate,
+		&invoice.SentAt,
 		&invoice.Subtotal,
 		&invoice.Tax,
 		&invoice.Total,
@@ -614,13 +622,24 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 		}
 	}
 
-	// Buat reminder otomatis untuk invoice yang dapat ditagihkan
-	// (DRAFT, PAID, CANCELLED tidak menghasilkan reminder)
-	if invoice.Status != "DRAFT" && invoice.Status != "PAID" && invoice.Status != "CANCELLED" {
+	// Invoice langsung dibuat dengan status SENT dianggap sudah dikirim:
+	// catat sent_at dan buat reminder yang masih relevan sejak invoice dibuat.
+	if invoice.Status == "SENT" {
+		sentAt := time.Now()
+		_, err = tx.Exec(context.Background(),
+			`UPDATE invoices SET sent_at = $1 WHERE id = $2`,
+			sentAt, invoice.ID,
+		)
+		if err != nil {
+			return nil, err
+		}
+		invoice.SentAt = &sentAt
+
 		err = CreateRemindersForInvoice(
 			context.Background(),
 			tx,
 			invoice.ID,
+			invoice.CreatedAt,
 			invoice.DueDate,
 		)
 		if err != nil {
@@ -690,13 +709,15 @@ func (s *InvoiceService) UpdateInvoice(
 	}
 	defer tx.Rollback(context.Background())
 
-	// Simpan status sebelumnya untuk mendeteksi transisi keluar DRAFT
+	// Simpan status & due_date sebelumnya untuk mendeteksi transisi
+	// keluar DRAFT dan perubahan due_date
 	var previousStatus string
+	var previousDueDate time.Time
 	err = tx.QueryRow(
 		context.Background(),
-		`SELECT status FROM invoices WHERE id = $1`,
+		`SELECT status, due_date FROM invoices WHERE id = $1`,
 		id,
-	).Scan(&previousStatus)
+	).Scan(&previousStatus, &previousDueDate)
 	if err != nil {
 		return nil, err
 	}
@@ -767,6 +788,7 @@ func (s *InvoiceService) UpdateInvoice(
 			client_id,
 			invoice_date,
 			due_date,
+			sent_at,
 			subtotal,
 			tax,
 			total,
@@ -792,6 +814,7 @@ func (s *InvoiceService) UpdateInvoice(
 		&invoice.ClientID,
 		&invoice.InvoiceDate,
 		&invoice.DueDate,
+		&invoice.SentAt,
 		&invoice.Subtotal,
 		&invoice.Tax,
 		&invoice.Total,
@@ -839,19 +862,56 @@ func (s *InvoiceService) UpdateInvoice(
 		}
 	}
 
-	// Reminder dibuat hanya saat invoice pertama kali keluar dari DRAFT
-	// menuju status aktif (bukan DRAFT/PAID/CANCELLED).
-	if previousStatus == "DRAFT" &&
-		invoice.Status != "DRAFT" &&
-		invoice.Status != "PAID" &&
-		invoice.Status != "CANCELLED" {
+	// Reminder dibuat saat invoice pertama kali dikirim:
+	// transisi DRAFT -> SENT. sent_at hanya dicatat sekali,
+	// update berikutnya pada invoice yang sudah SENT tidak mengubahnya.
+	if previousStatus == "DRAFT" && invoice.Status == "SENT" {
+		sentAt := time.Now()
+		_, err = tx.Exec(context.Background(),
+			`UPDATE invoices SET sent_at = $1 WHERE id = $2`,
+			sentAt, id,
+		)
+		if err != nil {
+			return nil, err
+		}
+		invoice.SentAt = &sentAt
 
 		err = CreateRemindersForInvoice(
 			context.Background(),
 			tx,
 			invoice.ID,
+			invoice.CreatedAt,
 			invoice.DueDate,
 		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Jika invoice sudah dikirim (sent_at sudah ada) dan due_date berubah,
+	// hitung ulang jadwal reminder yang belum dikirim menggunakan created_at
+	// sebagai batas. History reminder yang sudah SENT tidak diubah.
+	if invoice.SentAt != nil && !invoice.DueDate.Equal(previousDueDate) {
+		err = RescheduleRemindersForInvoice(
+			context.Background(),
+			tx,
+			invoice.ID,
+			invoice.CreatedAt,
+			invoice.DueDate,
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Invoice PAID/CANCELLED: hentikan semua reminder yang belum dikirim
+	// (PENDING/FAILED -> SKIPPED). History yang sudah SENT tetap dipertahankan.
+	if invoice.Status == "PAID" || invoice.Status == "CANCELLED" {
+		_, err = tx.Exec(context.Background(), `
+			UPDATE reminders
+			SET status = 'SKIPPED'
+			WHERE invoice_id = $1 AND sent_at IS NULL AND status IN ('PENDING', 'FAILED')
+		`, id)
 		if err != nil {
 			return nil, err
 		}

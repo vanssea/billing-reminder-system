@@ -1,16 +1,15 @@
-const API_URL = "http://localhost:8080/api/clients";
-const ADMIN_API_URL = "http://localhost:8080/api/admin/clients";
+const API_URL = "http://localhost:8080/api/admin/clients";
+const DELETE_API_URL = "http://localhost:8080/api/clients";
 
 export async function getClients(page, limit, search, status) {
-  // Jika dipanggil dari halaman Admin kamu (ada isian parameternya)
-  if (page !== undefined) {
-    const query = new URLSearchParams({ page, limit, search, status });
-    const response = await fetch(`${ADMIN_API_URL}?${query}`);
-    if (!response.ok) throw new Error("Gagal mengambil data client");
-    return response.json();
-  }
+  const params = new URLSearchParams();
+  if (page !== undefined) params.set("page", page);
+  if (limit !== undefined) params.set("limit", limit);
+  if (search) params.set("search", search);
+  if (status) params.set("status", status);
 
-  const response = await fetch(API_URL);
+  const query = params.toString();
+  const response = await fetch(`${API_URL}${query ? `?${query}` : ""}`);
   if (!response.ok) throw new Error("Gagal mengambil data client");
   return response.json();
 }
@@ -54,7 +53,7 @@ export async function updateClient(id, data) {
 }
 
 export async function deleteClient(id) {
-  const response = await fetch(`${API_URL}/${id}`, {
+  const response = await fetch(`${DELETE_API_URL}/${id}`, {
     method: "DELETE",
   });
   if (!response.ok) {
@@ -65,7 +64,7 @@ export async function deleteClient(id) {
 }
 
 export async function updateClientStatus(id, status) {
-  const response = await fetch(`${ADMIN_API_URL}/${id}/status`, {
+  const response = await fetch(`${API_URL}/${id}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status }),

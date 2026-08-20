@@ -33,11 +33,19 @@ const typeConfig = {
 };
 
 const statusConfig = {
-  SENT:    { label: "Terkirim",  color: "bg-emerald-500", text: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" },
-  PENDING: { label: "Menunggu", color: "bg-amber-500",   text: "text-amber-700",   bg: "bg-amber-50",   border: "border-amber-200" },
-  FAILED:  { label: "Gagal",    color: "bg-red-500",     text: "text-red-700",     bg: "bg-red-50",     border: "border-red-200" },
-  SKIPPED: { label: "Dilewati", color: "bg-slate-400",   text: "text-slate-600",   bg: "bg-slate-50",   border: "border-slate-200" },
+  PENDING:  { label: "Pending",   color: "bg-amber-500",   text: "text-amber-700",   bg: "bg-amber-50",   border: "border-amber-200" },
+  SENT:     { label: "Terkirim",  color: "bg-emerald-500", text: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" },
+  FAILED:   { label: "Gagal",     color: "bg-red-500",     text: "text-red-700",     bg: "bg-red-50",     border: "border-red-200" },
+  SKIPPED:  { label: "Dilewati",  color: "bg-slate-400",   text: "text-slate-600",   bg: "bg-slate-50",   border: "border-slate-200" },
 };
+
+const statusList = [
+  { key: "ALL", label: "Semua" },
+  { key: "PENDING", label: "Pending" },
+  { key: "SENT", label: "Terkirim" },
+  { key: "FAILED", label: "Gagal" },
+  { key: "SKIPPED", label: "Dilewati" },
+];
 
 /* =========================================================
    HELPERS
@@ -95,11 +103,11 @@ export default function ReminderManagement() {
 
   const stats = useMemo(() => {
     const total = reminders.length;
-    const sent = reminders.filter((r) => r.status === "SENT").length;
     const pending = reminders.filter((r) => r.status === "PENDING").length;
+    const sent = reminders.filter((r) => r.status === "SENT").length;
     const failed = reminders.filter((r) => r.status === "FAILED").length;
     const skipped = reminders.filter((r) => r.status === "SKIPPED").length;
-    return { total, sent, pending, failed, skipped };
+    return { total, pending, sent, failed, skipped };
   }, [reminders]);
 
   const filteredReminders = useMemo(() => {
@@ -124,9 +132,9 @@ export default function ReminderManagement() {
     try {
       setError("");
       await retryReminder(reminder.id);
-      setReminders((prev) => prev.map((r) => (r.id === reminder.id ? { ...r, status: "PENDING", sent_at: null, error_message: null } : r)));
-      setSelectedReminder((prev) => prev ? { ...prev, status: "PENDING", sent_at: null, error_message: null } : prev);
+      setSelectedReminder(null);
       showSuccess("Reminder dimasukkan kembali ke antrean.");
+      await loadReminders();
     } catch (err) {
       console.error(err);
       setError("Gagal memproses retry reminder.");
@@ -161,7 +169,7 @@ export default function ReminderManagement() {
         <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { title: "Total Reminder", value: stats.total, description: "Keseluruhan reminder terjadwal", icon: Bell, className: "bg-gradient-to-r from-[#2563eb] to-[#3b82f6]" },
-            { title: "Menunggu", value: stats.pending, description: "Reminder menunggu jadwal kirim", icon: Clock3, className: "bg-gradient-to-r from-[#f59e0b] to-[#fbbf24]" },
+            { title: "Pending", value: stats.pending, description: "Reminder menunggu jadwal kirim", icon: Clock3, className: "bg-gradient-to-r from-[#f59e0b] to-[#fbbf24]" },
             { title: "Terkirim", value: stats.sent, description: "Reminder sudah terkirim ke client", icon: Send, className: "bg-gradient-to-r from-[#0d9488] to-[#14b8a6]" },
             { title: "Gagal", value: stats.failed, description: "Reminder gagal dikirim", icon: AlertCircle, className: "bg-gradient-to-r from-[#dc2626] to-[#ef4444]" },
           ].map((s) => {
@@ -211,7 +219,7 @@ export default function ReminderManagement() {
 
             {/* Status Segmented Control */}
             <div className="flex items-center gap-1 rounded-xl bg-[#f3f1f7] p-1">
-              {[{ key: "ALL", label: "Semua" }, { key: "PENDING", label: "Menunggu" }, { key: "SENT", label: "Terkirim" }, { key: "FAILED", label: "Gagal" }, { key: "SKIPPED", label: "Dilewati" }].map((s) => (
+              {statusList.map((s) => (
                 <button
                   key={s.key}
                   type="button"
