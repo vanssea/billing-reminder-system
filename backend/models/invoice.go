@@ -42,6 +42,7 @@ type Invoice struct {
 	ClientID      string        `json:"client_id"`
 	InvoiceDate   time.Time     `json:"invoice_date"`
 	DueDate       time.Time     `json:"due_date"`
+	SentAt        *time.Time    `json:"sent_at,omitempty"`
 	Subtotal      float64       `json:"subtotal"`
 	Tax           float64       `json:"tax"`
 	Total         float64       `json:"total"`

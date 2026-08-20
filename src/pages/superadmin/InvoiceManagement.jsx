@@ -54,7 +54,7 @@ export default function InvoiceManagement() {
       try {
         setLoading(true); setError("");
         const [invData, cliData, prdData] = await Promise.all([getInvoices(), getClients(), getProducts()]);
-        if (!ignore) { setClients(cliData); setInvoices(invData); setProducts(prdData); }
+        if (!ignore) { setClients((cliData && cliData.data) || cliData || []); setInvoices(invData); setProducts(prdData); }
       } catch (err) { if (!ignore) setError(err.message || "Gagal memuat data"); } finally { if (!ignore) setLoading(false); }
     })(); 
     return () => { ignore = true; }; 
@@ -438,7 +438,11 @@ const filteredInvoices = useMemo(() => {
                 <div>
                   <label className="mb-1.5 block text-sm font-semibold text-[#464555]">Status</label>
                   <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="w-full rounded-lg border border-[#c7c4d8] bg-white px-3 py-2 text-sm text-[#191c1e] outline-none transition focus:border-[#3525cd] focus:ring-2 focus:ring-[#3525cd]/20">
-                    {Object.keys(statusConfig).map((s) => <option key={s} value={s}>{statusConfig[s].label}</option>)}
+                    {[
+                      ...(editingId
+                        ? Object.keys(statusConfig)
+                        : ["DRAFT", "SENT"]),
+                    ].map((s) => <option key={s} value={s}>{statusConfig[s].label}</option>)}
                   </select>
                 </div>
 

@@ -99,10 +99,11 @@ export default function ClientManagement() {
       setLoading(true);
       setError("");
 
-      const data = await getClients();
+      const res = await getClients(1, 1000);
+      const data = (res && res.data) || res || [];
 
       setClients(
-        (data || []).map((client) => ({
+        data.map((client) => ({
           ...client,
           status: toUiStatus(client.status),
         }))
