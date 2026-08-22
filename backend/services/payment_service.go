@@ -13,7 +13,8 @@ import (
 )
 
 type PaymentService struct {
-	DB *pgxpool.Pool
+	DB       *pgxpool.Pool
+	WhatsApp *WhatsAppService
 }
 
 func NewPaymentService(db *pgxpool.Pool) *PaymentService {
@@ -223,6 +224,8 @@ func (s *PaymentService) ApprovePayment(ctx context.Context, id string, req mode
 		return nil, err
 	}
 
+	go sendPaymentApprovedWhatsApp(s.DB, s.WhatsApp, id)
+
 	return s.GetPaymentByID(ctx, id)
 }
 
@@ -269,6 +272,12 @@ func (s *PaymentService) RejectPayment(ctx context.Context, id string, req model
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
+
+	reason := ""
+	if req.Notes != nil {
+		reason = *req.Notes
+	}
+	go sendPaymentRejectedWhatsApp(s.DB, s.WhatsApp, id, reason)
 
 	return s.GetPaymentByID(ctx, id)
 }
