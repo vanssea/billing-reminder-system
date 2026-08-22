@@ -39,29 +39,6 @@ func main() {
 	reminderService := services.NewReminderService(db)
 	paymentService := services.NewPaymentService(db)
 
-	// WhatsApp service berjalan di background (goroutine)
-	// agar server HTTP tetap bisa jalan meski QR belum discan.
-	// Instance disimpan agar bisa dipakai oleh handler & scheduler.
-	var whatsappService *services.WhatsAppService
-	whatsappService, waErr := services.NewWhatsAppService()
-	if waErr != nil {
-		log.Println("Peringatan WhatsApp:", waErr)
-		whatsappService = nil
-	} else if whatsappService != nil {
-		defer whatsappService.Close()
-	}
-
-	// Hubungkan WhatsApp & PDF ke ReminderService lalu nyalakan scheduler
-	// background (tiap 1 menit memproses reminder yang jatuh tempo).
-	reminderService.WhatsApp = whatsappService
-	reminderService.PDF = pdfService
-	invoiceService.WhatsApp = whatsappService
-	invoiceService.PDF = pdfService
-	paymentService.WhatsApp = whatsappService
-	if whatsappService != nil {
-		go reminderService.StartReminderScheduler(context.Background())
-	}
-
 	// Membuat handler
 	clientHandler := handlers.NewClientHandler(clientService)
 	adminHandler := handlers.NewAdminHandler(adminService)
@@ -72,7 +49,6 @@ func main() {
 	invoiceHandler := handlers.NewInvoiceHandler(invoiceService)
 	reminderHandler := handlers.NewReminderHandler(reminderService)
 	paymentHandler := handlers.NewPaymentHandler(paymentService)
-	whatsappHandler := handlers.NewWhatsAppHandler(whatsappService, pdfService)
 
 	// Setup router
 	router := chi.NewRouter()
@@ -111,7 +87,6 @@ func main() {
 	routes.InvoiceRoutes(router, invoiceHandler)
 	routes.ReminderRoutes(router, reminderHandler)
 	routes.PaymentRoutes(router, paymentHandler)
-	routes.WhatsAppRoutes(router, whatsappHandler)
 
 	// Menjalankan server
 	server := &http.Server{
@@ -134,8 +109,6 @@ func main() {
 	log.Println("API Invoices: http://localhost:8080/api/invoices")
 	log.Println("API Reminders: http://localhost:8080/api/reminders")
 	log.Println("API Payments: http://localhost:8080/api/payments")
-	log.Println("API WhatsApp Status: http://localhost:8080/api/whatsapp/status")
-	log.Println("API WhatsApp Test: http://localhost:8080/api/whatsapp/test")
 	log.Println("=================================")
 
 	err = server.ListenAndServe()
