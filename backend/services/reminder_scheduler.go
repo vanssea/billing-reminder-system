@@ -55,9 +55,10 @@ func (s *ReminderService) processDueReminders(ctx context.Context) {
 
 // dueReminderRow adalah baris reminder yang siap diproses.
 type dueReminderRow struct {
-	ID        string
-	InvoiceID string
-	Phone     string
+	ID         string
+	InvoiceID  string
+	Phone      string
+	ReminderType string
 }
 
 // getDueReminders mengambil reminder PENDING yang sudah jatuh tempo.
@@ -70,12 +71,13 @@ func (s *ReminderService) getDueReminders(ctx context.Context) ([]dueReminderRow
 		FROM reminders r
 		INNER JOIN invoices i ON i.id = r.invoice_id
 		INNER JOIN clients c ON c.id = i.client_id
-		WHERE r.status = 'PENDING'
+WHERE r.status = 'PENDING'
 		  AND r.scheduled_at <= NOW()
 		  AND r.sent_at IS NULL
 		  AND c.phone IS NOT NULL
 		  AND i.status IN ('SENT', 'UNPAID')
-		ORDER BY r.scheduled_at ASC
+		  AND r.reminder_type != ''
+ORDER BY r.scheduled_at ASC
 		LIMIT 50
 	`)
 	if err != nil {
@@ -86,7 +88,7 @@ func (s *ReminderService) getDueReminders(ctx context.Context) ([]dueReminderRow
 	var results []dueReminderRow
 	for rows.Next() {
 		var r dueReminderRow
-		if err := rows.Scan(&r.ID, &r.InvoiceID, &r.Phone); err != nil {
+		if err := rows.Scan(&r.ID, &r.InvoiceID, &r.Phone, &r.ReminderType); err != nil {
 			return nil, err
 		}
 		results = append(results, r)
@@ -94,7 +96,7 @@ func (s *ReminderService) getDueReminders(ctx context.Context) ([]dueReminderRow
 	return results, rows.Err()
 }
 
-// processReminder mengirim satu reminder (pesan teks + tautan invoice)
+// processReminder mengirim satu reminder (pesan teks)
 // lalu memperbarui statusnya.
 func (s *ReminderService) processReminder(ctx context.Context, r dueReminderRow) error {
 	if s.WhatsApp == nil {
@@ -131,7 +133,22 @@ func (s *ReminderService) processReminder(ctx context.Context, r dueReminderRow)
 		return nil
 	}
 
-	message := buildReminderMessage(inv, buildInvoiceLink(r.InvoiceID))
+	message := buildReminderMessage(inv)
+
+	if r.ReminderType == "H-1" {
+		// Kirim PDF untuk reminder H-1 saja
+		pdfBytes, err := s.PDF.RenderInvoicePDF(inv)
+		if err == nil {
+			fileName := "Invoice-" + strings.ReplaceAll(inv.InvoiceNumber, "/", "-") + ".pdf"
+			if err := s.WhatsApp.SendDocument(r.Phone, fileName, pdfBytes); err != nil {
+				log.Printf("Reminder H-1: kirim PDF gagal: %v", err)
+			} else {
+				log.Printf("Reminder H-1: PDF terkirim ke %s", r.Phone)
+			}
+		} else {
+			log.Printf("Reminder H-1: gagal generate PDF: %v", err)
+		}
+	}
 
 	if err := s.WhatsApp.Send(r.Phone, message); err != nil {
 		return fail(fmt.Errorf("kirim teks gagal: %v", err))
@@ -150,9 +167,8 @@ func (s *ReminderService) processReminder(ctx context.Context, r dueReminderRow)
 	return nil
 }
 
-// buildReminderMessage menyusun isi pesan pengingat WhatsApp
-// beserta tautan invoice.
-func buildReminderMessage(inv *InvoiceData, invoiceLink string) string {
+// buildReminderMessage menyusun isi pesan pengingat WhatsApp.
+func buildReminderMessage(inv *InvoiceData) string {
 	pic := strings.TrimSpace(inv.ClientPIC)
 	var sapaan string
 	if pic != "" {
@@ -175,9 +191,6 @@ Saat ini invoice tersebut masih memiliki status *%s*.
 
 Mohon melakukan pembayaran sebelum tanggal jatuh tempo.
 
-Lihat Invoice:
-%s
-
 Jika pembayaran sudah dilakukan, silakan abaikan pesan ini.
 
 Terima kasih.
@@ -187,6 +200,5 @@ Terima kasih.
 		formatRupiah(inv.Total),
 		formatTanggalIndo(inv.DueDate),
 		inv.Status,
-		invoiceLink,
 	)
 }

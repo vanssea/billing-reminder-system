@@ -1,4 +1,6 @@
 import { useState } from "react";
+import Sidebar from "../../components/layout/Sidebar";
+import Header from "../../components/layout/Header";
 import {
   Users,
   ShieldCheck,
@@ -746,6 +748,9 @@ export default function SuperAdminDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 md:pl-[280px]">
+      <Sidebar />
+      <Header role="superadmin" />
+
       {/* Main Content */}
       <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
         {/* Header */}

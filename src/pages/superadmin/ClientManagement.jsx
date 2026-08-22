@@ -1,4 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
+import Sidebar from "../../components/layout/Sidebar";
+import Header from "../../components/layout/Header";
 import {
   Search,
   Plus,
@@ -265,6 +267,9 @@ export default function ClientManagement() {
 
   return (
     <div className="min-h-screen bg-[#fcf8ff] pt-16 md:pl-[280px]">
+      <Sidebar />
+      <Header role="superadmin" />
+
       <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
         {/* Banner */}
         <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#3525cd] to-[#5b44f3] p-6 text-white shadow-lg">

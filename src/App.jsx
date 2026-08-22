@@ -18,7 +18,14 @@ import AdminProducts from "./pages/admin/Products";
 import AdminInvoices from "./pages/admin/Invoices";
 import AdminPayments from "./pages/admin/Payments";
 import SuperAdminDashboard from "./pages/superadmin/Dashboard";
+import AdminManagement from "./pages/superadmin/AdminManagement";
+import ClientManagement from "./pages/superadmin/ClientManagement";
+import ProductManagement from "./pages/superadmin/ProductManagement";
+import InvoiceManagement from "./pages/superadmin/InvoiceManagement";
+import ReminderManagement from "./pages/superadmin/ReminderManagement";
 import PaymentManagement from "./pages/superadmin/PaymentManagement";
+import Reports from "./pages/superadmin/Reports";
+import Settings from "./pages/superadmin/Settings";
 
 // Static Pages
 import TentangKami from "./pages/static/TentangKami";
@@ -97,15 +104,6 @@ function App() {
         />
 
         <Route
-          path="/superadmin/dashboard"
-          element={
-            <ProtectedRoute roles={["SUPERADMIN"]}>
-              <SuperAdminDashboard />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
           path="/admin/payments"
           element={
             <ProtectedRoute roles={["ADMIN"]}>
@@ -115,10 +113,82 @@ function App() {
         />
 
         <Route
+          path="/superadmin/dashboard"
+          element={
+            <ProtectedRoute roles={["SUPERADMIN"]}>
+              <SuperAdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/superadmin/admins"
+          element={
+            <ProtectedRoute roles={["SUPERADMIN"]}>
+              <AdminManagement />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/superadmin/clients"
+          element={
+            <ProtectedRoute roles={["SUPERADMIN"]}>
+              <ClientManagement />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/superadmin/products"
+          element={
+            <ProtectedRoute roles={["SUPERADMIN"]}>
+              <ProductManagement />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/superadmin/invoices"
+          element={
+            <ProtectedRoute roles={["SUPERADMIN"]}>
+              <InvoiceManagement />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/superadmin/reminders"
+          element={
+            <ProtectedRoute roles={["SUPERADMIN"]}>
+              <ReminderManagement />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/superadmin/payments"
           element={
             <ProtectedRoute roles={["SUPERADMIN"]}>
               <PaymentManagement />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/superadmin/reports"
+          element={
+            <ProtectedRoute roles={["SUPERADMIN"]}>
+              <Reports />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/superadmin/settings"
+          element={
+            <ProtectedRoute roles={["SUPERADMIN"]}>
+              <Settings />
             </ProtectedRoute>
           }
         />

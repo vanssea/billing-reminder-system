@@ -29,6 +29,10 @@ func main() {
 
 	// Membuat service
 	pdfService := services.NewPDFService()
+	waService, waErr := services.NewWhatsAppService()
+	if waErr != nil {
+		log.Printf("WhatsApp service tidak aktif: %v (notifikasi WA dilewati)", waErr)
+	}
 	clientService := services.NewClientService(db)
 	adminService := services.NewAdminService(db)
 	productService := services.NewProductService(db)
@@ -36,8 +40,13 @@ func main() {
 	faqService := services.NewFAQService(db)
 	authService := services.NewAuthService(db)
 	invoiceService := services.NewInvoiceService(db)
+	invoiceService.WhatsApp = waService
+	invoiceService.PDF = pdfService
 	reminderService := services.NewReminderService(db)
+	reminderService.WhatsApp = waService
+	reminderService.PDF = pdfService
 	paymentService := services.NewPaymentService(db)
+	paymentService.WhatsApp = waService
 
 	// Membuat handler
 	clientHandler := handlers.NewClientHandler(clientService)
@@ -49,6 +58,7 @@ func main() {
 	invoiceHandler := handlers.NewInvoiceHandler(invoiceService)
 	reminderHandler := handlers.NewReminderHandler(reminderService)
 	paymentHandler := handlers.NewPaymentHandler(paymentService)
+	whatsappHandler := handlers.NewWhatsAppHandler(waService, pdfService)
 
 	// Setup router
 	router := chi.NewRouter()
@@ -87,6 +97,10 @@ func main() {
 	routes.InvoiceRoutes(router, invoiceHandler)
 	routes.ReminderRoutes(router, reminderHandler)
 	routes.PaymentRoutes(router, paymentHandler)
+	routes.WhatsAppRoutes(router, whatsappHandler)
+
+	// Menjalankan scheduler reminder di background (H-30 s/d H-1 + overdue)
+	go reminderService.StartReminderScheduler(context.Background())
 
 	// Menjalankan server
 	server := &http.Server{

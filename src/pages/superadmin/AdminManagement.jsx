@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import Sidebar from "../../components/layout/Sidebar";
+import Header from "../../components/layout/Header";
 import {
   Search,
   Plus,
@@ -34,6 +36,19 @@ const emptyForm = {
 const toDate = (value) =>
   value ? new Date(value).toLocaleDateString("id-ID") : "-";
 
+const roleLabels = {
+  ADMIN: "Admin",
+  SUPERADMIN: "Super Admin",
+};
+
+const getRoleLabel = (role) =>
+  roleLabels[(role || "").toUpperCase()] || role || "Admin";
+
+const getAccountStatus = (admin) =>
+  ((admin && admin.status) || "ACTIVE").toUpperCase() === "INACTIVE"
+    ? "INACTIVE"
+    : "ACTIVE";
+
 const isThisMonth = (value) => {
   if (!value) return false;
   const date = new Date(value);
@@ -53,7 +68,7 @@ function FieldError({ field, errors }) {
 export default function AdminManagement() {
   const [admins, setAdmins] = useState([]);
   const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -118,10 +133,11 @@ export default function AdminManagement() {
           .includes(search.toLowerCase()) ||
         (admin.email || "").toLowerCase().includes(search.toLowerCase()) ||
         (admin.phone || "").toLowerCase().includes(search.toLowerCase());
-      const matchRole = roleFilter === "ALL" || admin.role === roleFilter;
-      return matchSearch && matchRole;
+      const matchStatus =
+        statusFilter === "ALL" || getAccountStatus(admin) === statusFilter;
+      return matchSearch && matchStatus;
     });
-  }, [admins, search, roleFilter]);
+  }, [admins, search, statusFilter]);
 
   const openAdd = () => {
     setEditingId(null);
@@ -240,6 +256,9 @@ export default function AdminManagement() {
 
   return (
     <div className="min-h-screen bg-[#fcf8ff] pt-16 md:pl-[280px]">
+      <Sidebar />
+      <Header role="superadmin" />
+
       <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
         {/* Banner */}
         <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#3525cd] to-[#5b44f3] p-6 text-white shadow-lg">
@@ -354,13 +373,13 @@ export default function AdminManagement() {
             </div>
 
             <div className="flex flex-1 items-center gap-1 rounded-xl bg-[#f3f1f7] p-1">
-              {[{ key: "ALL", label: "Semua" }, { key: "ADMIN", label: "Admin" }, { key: "SUPERADMIN", label: "Super Admin" }].map((s) => (
+              {[{ key: "ALL", label: "Semua" }, { key: "ACTIVE", label: "ACTIVE" }, { key: "INACTIVE", label: "INACTIVE" }].map((s) => (
                 <button
                   key={s.key}
                   type="button"
-                  onClick={() => setRoleFilter(s.key)}
+                  onClick={() => setStatusFilter(s.key)}
                   className={`flex-1 rounded-lg px-3.5 py-2 text-xs font-bold whitespace-nowrap transition ${
-                    roleFilter === s.key ? "bg-white text-[#3525cd] shadow-sm" : "text-[#8b8898] hover:text-[#464555]"
+                    statusFilter === s.key ? "bg-white text-[#3525cd] shadow-sm" : "text-[#8b8898] hover:text-[#464555]"
                   }`}
                 >
                   {s.label}
@@ -377,6 +396,7 @@ export default function AdminManagement() {
                   <th className="px-4 py-3 font-semibold">Admin</th>
                   <th className="px-4 py-3 font-semibold">Email</th>
                   <th className="px-4 py-3 font-semibold">No. Telepon</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold">Bergabung</th>
                   <th className="px-4 py-3 text-right font-semibold">Aksi</th>
                 </tr>
@@ -384,13 +404,13 @@ export default function AdminManagement() {
               <tbody>
                 {loading && admins.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-12 text-center text-[#9a97a9]">
+                    <td colSpan={6} className="px-4 py-12 text-center text-[#9a97a9]">
                       Memuat data admin...
                     </td>
                   </tr>
                 ) : filteredAdmins.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-12 text-center text-[#9a97a9]">
+                    <td colSpan={6} className="px-4 py-12 text-center text-[#9a97a9]">
                       Tidak ada admin yang cocok dengan filter.
                     </td>
                   </tr>
@@ -416,6 +436,24 @@ export default function AdminManagement() {
                       <td className="px-4 py-3 text-[#464555]">{admin.email}</td>
                       <td className="px-4 py-3 text-[#464555]">
                         {admin.phone || "-"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            getAccountStatus(admin) === "ACTIVE"
+                              ? "bg-[#10b981]/10 text-[#0f9d6e]"
+                              : "bg-[#e2e8f0] text-[#64748b]"
+                          }`}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${
+                              getAccountStatus(admin) === "ACTIVE"
+                                ? "bg-[#10b981]"
+                                : "bg-[#94a3b8]"
+                            }`}
+                          />
+                          {getAccountStatus(admin)}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-[#464555]">
                         {toDate(admin.created_at)}
@@ -704,7 +742,7 @@ export default function AdminManagement() {
                     <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1">
                       <span className="h-1.5 w-1.5 rounded-full bg-white" />
                       <span className="text-xs font-semibold text-white">
-                        {detailTarget.role || "ADMIN"}
+                        {getRoleLabel(detailTarget.role)}
                       </span>
                     </div>
                   </div>
