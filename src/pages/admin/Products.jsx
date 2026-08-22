@@ -23,11 +23,15 @@ import {
 
 const emptyForm = {
   name: "",
-  storage: "",
-  max_mailbox: "",
+  description: "",
   price: "",
-  billing_cycle: "Bulanan",
+  price_yearly: "",
+  billing_type: "Monthly",
+  features: "",
+  popular: false,
+  cta: "Pilih Paket",
   status: "Active",
+  display_order: 1,
 };
 
 const statusStyles = {
@@ -94,13 +98,13 @@ export default function ProductManagement() {
       {
         title: "Total Produk",
         value: products.length,
-        description: "Semua paket layanan aktif",
+        description: "Semua paket layanan",
         icon: Package,
       },
       {
         title: "Aktif",
         value: products.filter((p) => p.status === "Active").length,
-        description: "Paket yang tersedia untuk client",
+        description: "Paket tersedia untuk client",
         icon: CheckCircle2,
       },
       {
@@ -130,22 +134,33 @@ export default function ProductManagement() {
 
   const openEdit = (product) => {
     setEditingId(product.id);
+    
+    let featuresString = "";
+    if (Array.isArray(product.features)) {
+      featuresString = product.features.join(", ");
+    } else if (typeof product.features === "string") {
+      featuresString = product.features;
+    }
+
     setForm({
       name: product.name || "",
-      storage: product.storage || "",
-      max_mailbox: product.max_mailbox || "",
-      price: product.price || "",
-      billing_cycle: product.billing_cycle || "Bulanan",
+      description: product.description || "",
+      price: product.price ?? "",
+      price_yearly: product.price_yearly ?? "",
+      billing_type: product.billing_type || "Monthly",
+      features: featuresString,
+      popular: product.popular || false,
+      cta: product.cta || "Pilih Paket",
       status: product.status || "Active",
+      display_order: product.display_order ?? 1,
     });
     setErrors({});
     setModalOpen(true);
   };
 
-const handleSave = async () => {
+  const handleSave = async () => {
     const newErrors = {};
     if (!form.name.trim()) newErrors.name = "Nama produk wajib diisi";
-    if (!form.storage.trim()) newErrors.storage = "Kapasitas storage wajib diisi";
     if (!form.price.toString().trim()) newErrors.price = "Harga wajib diisi";
 
     setErrors(newErrors);
@@ -156,14 +171,21 @@ const handleSave = async () => {
       setError("");
       setSuccess("");
 
-      // UBAH DI SINI: Pastikan price dan max_mailbox dikirim sebagai tipe data Angka (Number)
+      const featuresArray = typeof form.features === "string" && form.features.trim() !== ""
+        ? form.features.split(",").map((item) => item.trim())
+        : [];
+
       const payload = {
         name: form.name,
-        storage: form.storage,
-        max_mailbox: form.max_mailbox ? Number(form.max_mailbox) : 0,
+        description: form.description,
         price: Number(form.price),
-        billing_cycle: form.billing_cycle,
+        price_yearly: form.price_yearly !== "" ? Number(form.price_yearly) : Number(form.price) * 12 * 0.8,
+        billing_type: form.billing_type,
+        features: featuresArray,
+        popular: Boolean(form.popular),
+        cta: form.cta || "Pilih Paket",
         status: form.status || "Active",
+        display_order: Number(form.display_order) || 1,
       };
 
       if (editingId) {
@@ -218,11 +240,10 @@ const handleSave = async () => {
     <div className="flex min-h-screen bg-[#fcf8ff] font-sans">
       <Sidebar role="admin" />
       
-    <div className="flex-1 md:ml-[280px] flex flex-col min-h-screen w-full relative">
+      <div className="flex-1 md:ml-[280px] flex flex-col min-h-screen w-full relative">
         <Header />
 
         <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8 mt-20">
-          {/* Header */}
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold text-[#191c1e]">Pengelolaan Produk</h1>
@@ -255,7 +276,6 @@ const handleSave = async () => {
             </div>
           )}
 
-          {/* Stats Cards */}
           <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {stats.map((stat) => (
               <div key={stat.title} className="rounded-xl border border-[#e0e3e5] bg-white p-5 shadow-sm">
@@ -271,9 +291,7 @@ const handleSave = async () => {
             ))}
           </div>
 
-          {/* Table Card */}
           <div className="overflow-hidden rounded-xl border border-[#e0e3e5] bg-white shadow-sm">
-            {/* Toolbar */}
             <div className="flex flex-wrap items-center gap-3 border-b border-[#e0e3e5] p-4">
               <div className="relative min-w-[220px] flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9a97a9]" />
@@ -297,16 +315,15 @@ const handleSave = async () => {
               </select>
             </div>
 
-            {/* Table */}
             <div className="overflow-x-auto">
               <table className="w-full min-w-[940px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-[#e0e3e5] bg-[#faf9fc] text-xs uppercase tracking-wide text-[#9a97a9]">
                     <th className="px-4 py-3 font-semibold">Nama Produk</th>
-                    <th className="px-4 py-3 font-semibold">Storage</th>
-                    <th className="px-4 py-3 font-semibold">Max Mailbox</th>
-                    <th className="px-4 py-3 font-semibold">Harga</th>
-                    <th className="px-4 py-3 font-semibold">Siklus</th>
+                    <th className="px-4 py-3 font-semibold">Harga Bulanan</th>
+                    <th className="px-4 py-3 font-semibold">Harga Tahunan</th>
+                    <th className="px-4 py-3 font-semibold">Tipe Billing</th>
+                    <th className="px-4 py-3 font-semibold">Populer</th>
                     <th className="px-4 py-3 font-semibold">Status</th>
                     <th className="px-4 py-3 text-right font-semibold">Aksi</th>
                   </tr>
@@ -322,10 +339,16 @@ const handleSave = async () => {
                     filteredProducts.map((product) => (
                       <tr key={product.id} className="border-b border-[#e0e3e5] transition hover:bg-[#faf9fc]">
                         <td className="px-4 py-3 font-semibold text-[#191c1e]">{product.name}</td>
-                        <td className="px-4 py-3 text-[#464555]">{product.storage}</td>
-                        <td className="px-4 py-3 text-[#464555]">{product.max_mailbox}</td>
-                        <td className="px-4 py-3 text-[#464555]">Rp {Number(product.price).toLocaleString("id-ID")}</td>
-                        <td className="px-4 py-3 text-[#464555]">{product.billing_cycle}</td>
+                        <td className="px-4 py-3 text-[#464555]">Rp {Number(product.price || 0).toLocaleString("id-ID")}</td>
+                        <td className="px-4 py-3 text-[#464555]">Rp {Number(product.price_yearly || 0).toLocaleString("id-ID")}</td>
+                        <td className="px-4 py-3 text-[#464555]">{product.billing_type || "-"}</td>
+                        <td className="px-4 py-3 text-[#464555]">
+                          {product.popular ? (
+                            <span className="rounded bg-[#3525cd]/10 px-2 py-0.5 text-xs font-bold text-[#3525cd]">Ya</span>
+                          ) : (
+                            <span className="text-xs text-[#9a97a9]">Tidak</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <StatusBadge status={product.status} />
                         </td>
@@ -365,10 +388,9 @@ const handleSave = async () => {
             </div>
           </div>
 
-          {/* Modal Tambah/Edit Produk */}
           {modalOpen && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
-              <div className="w-full max-w-md rounded-xl border border-[#e0e3e5] bg-white shadow-xl">
+              <div className="w-full max-w-lg rounded-xl border border-[#e0e3e5] bg-white shadow-xl">
                 <div className="flex items-center justify-between border-b border-[#e0e3e5] px-5 py-4">
                   <h2 className="text-lg font-bold text-[#191c1e]">
                     {editingId ? "Edit Produk" : "Tambah Produk Baru"}
@@ -378,76 +400,125 @@ const handleSave = async () => {
                   </button>
                 </div>
 
-                <div className="space-y-4 px-5 py-5 max-h-[60vh] overflow-y-auto">
+                <div className="space-y-4 px-5 py-5 max-h-[70vh] overflow-y-auto">
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-[#464555]">Nama Produk</label>
                     <input
                       type="text"
                       value={form.name}
                       onChange={(e) => setForm({ ...form, name: e.target.value })}
-                      placeholder="cth: Email Hosting Business"
+                      placeholder="cth: Starter"
                       className={fieldClass("name")}
                     />
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-sm font-medium text-[#464555]">Storage</label>
-                    <input
-                      type="text"
-                      value={form.storage}
-                      onChange={(e) => setForm({ ...form, storage: e.target.value })}
-                      placeholder="cth: 10 GB"
-                      className={fieldClass("storage")}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-[#464555]">Max Mailbox</label>
-                    <input
-                      type="text"
-                      value={form.max_mailbox}
-                      onChange={(e) => setForm({ ...form, max_mailbox: e.target.value })}
-                      placeholder="cth: 25"
+                    <label className="mb-1.5 block text-sm font-medium text-[#464555]">Deskripsi</label>
+                    <textarea
+                      value={form.description}
+                      onChange={(e) => setForm({ ...form, description: e.target.value })}
+                      placeholder="Deskripsi singkat paket layanan"
+                      rows={2}
                       className={inputClass}
                     />
                   </div>
 
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-[#464555]">Harga (Rp)</label>
-                    <input
-                      type="number"
-                      value={form.price}
-                      onChange={(e) => setForm({ ...form, price: e.target.value })}
-                      placeholder="cth: 200000"
-                      className={fieldClass("price")}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-[#464555]">Siklus Pembayaran</label>
-                    <select
-                      value={form.billing_cycle}
-                      onChange={(e) => setForm({ ...form, billing_cycle: e.target.value })}
-                      className={inputClass}
-                    >
-                      <option>Bulanan</option>
-                      <option>Tahunan</option>
-                    </select>
-                  </div>
-
-                  {editingId && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-[#464555]">Status</label>
+                      <label className="mb-1.5 block text-sm font-medium text-[#464555]">Harga (Bulanan) - Rp</label>
+                      <input
+                        type="number"
+                        value={form.price}
+                        onChange={(e) => setForm({ ...form, price: e.target.value })}
+                        placeholder="cth: 80000"
+                        className={fieldClass("price")}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-[#464555]">Harga (Tahunan Total) - Rp</label>
+                      <input
+                        type="number"
+                        value={form.price_yearly}
+                        onChange={(e) => setForm({ ...form, price_yearly: e.target.value })}
+                        placeholder="cth: 768000"
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-[#464555]">Tipe Billing</label>
                       <select
-                        value={form.status}
-                        onChange={(e) => setForm({ ...form, status: e.target.value })}
+                        value={form.billing_type}
+                        onChange={(e) => setForm({ ...form, billing_type: e.target.value })}
                         className={inputClass}
                       >
-                        <option>Active</option>
-                        <option>Inactive</option>
+                        <option value="Monthly">Monthly</option>
+                        <option value="Yearly">Yearly</option>
+                        <option value="Both">Both</option>
                       </select>
                     </div>
-                  )}
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-[#464555]">Urutan Tampilan (Display Order)</label>
+                      <input
+                        type="number"
+                        value={form.display_order}
+                        onChange={(e) => setForm({ ...form, display_order: e.target.value })}
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-[#464555]">Fitur (Pisahkan dengan koma)</label>
+                    <input
+                      type="text"
+                      value={form.features}
+                      onChange={(e) => setForm({ ...form, features: e.target.value })}
+                      placeholder="cth: 1 website, 10 GB storage NVMe"
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-[#464555]">Teks Tombol (CTA)</label>
+                      <input
+                        type="text"
+                        value={form.cta}
+                        onChange={(e) => setForm({ ...form, cta: e.target.value })}
+                        placeholder="cth: Pilih"
+                        className={inputClass}
+                      />
+                    </div>
+                    {editingId && (
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium text-[#464555]">Status</label>
+                        <select
+                          value={form.status}
+                          onChange={(e) => setForm({ ...form, status: e.target.value })}
+                          className={inputClass}
+                        >
+                          <option>Active</option>
+                          <option>Inactive</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2">
+                    <input
+                      type="checkbox"
+                      id="popular-checkbox"
+                      checked={form.popular}
+                      onChange={(e) => setForm({ ...form, popular: e.target.checked })}
+                      className="h-4 w-4 rounded border-[#c7c4d8] text-[#3525cd] focus:ring-[#3525cd]"
+                    />
+                    <label htmlFor="popular-checkbox" className="text-sm font-medium text-[#464555] cursor-pointer">
+                      Jadikan Produk Populer (Unggulan)
+                    </label>
+                  </div>
                 </div>
 
                 <div className="flex justify-end gap-2 border-t border-[#e0e3e5] px-5 py-4">
@@ -462,7 +533,6 @@ const handleSave = async () => {
             </div>
           )}
 
-          {/* Modal Konfirmasi Ubah Status / Nonaktifkan */}
           {statusTarget && (
             <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4">
               <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl text-center">
@@ -485,10 +555,9 @@ const handleSave = async () => {
             </div>
           )}
 
-          {/* Modal Detail Produk */}
           {detailTarget && (
             <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4">
-              <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+              <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl max-h-[80vh] overflow-y-auto">
                 <div className="flex items-center justify-between border-b pb-3">
                   <h2 className="text-lg font-bold text-[#191c1e]">Detail Produk</h2>
                   <button onClick={() => setDetailTarget(null)} className="rounded-lg p-1 text-[#464555]">
@@ -496,12 +565,25 @@ const handleSave = async () => {
                   </button>
                 </div>
                 <div className="py-4 space-y-3 text-sm">
-                  <div className="flex justify-between"><span className="text-[#777587]">Nama</span><span className="font-medium">{detailTarget.name}</span></div>
-                  <div className="flex justify-between"><span className="text-[#777587]">Storage</span><span className="font-medium">{detailTarget.storage}</span></div>
-                  <div className="flex justify-between"><span className="text-[#777587]">Max Mailbox</span><span className="font-medium">{detailTarget.max_mailbox}</span></div>
-                  <div className="flex justify-between"><span className="text-[#777587]">Harga</span><span className="font-medium">Rp {Number(detailTarget.price).toLocaleString("id-ID")}</span></div>
-                  <div className="flex justify-between"><span className="text-[#777587]">Siklus</span><span className="font-medium">{detailTarget.billing_cycle}</span></div>
-                  <div className="flex justify-between items-center"><span className="text-[#777587]">Status</span><StatusBadge status={detailTarget.status} /></div>
+                  <div className="flex justify-between"><span className="text-[#777587]">Nama</span><span className="font-medium text-right">{detailTarget.name}</span></div>
+                  <div className="flex flex-col gap-1 border-t pt-2"><span className="text-[#777587]">Deskripsi</span><span className="font-medium text-gray-700">{detailTarget.description || "-"}</span></div>
+                  <div className="flex justify-between border-t pt-2"><span className="text-[#777587]">Harga Bulanan</span><span className="font-medium">Rp {Number(detailTarget.price || 0).toLocaleString("id-ID")}</span></div>
+                  <div className="flex justify-between"><span className="text-[#777587]">Harga Tahunan</span><span className="font-medium">Rp {Number(detailTarget.price_yearly || 0).toLocaleString("id-ID")}</span></div>
+                  <div className="flex justify-between"><span className="text-[#777587]">Tipe Billing</span><span className="font-medium">{detailTarget.billing_type || "-"}</span></div>
+                  <div className="flex justify-between"><span className="text-[#777587]">Teks CTA</span><span className="font-medium">{detailTarget.cta || "-"}</span></div>
+                  <div className="flex justify-between"><span className="text-[#777587]">Urutan</span><span className="font-medium">{detailTarget.display_order}</span></div>
+                  <div className="flex justify-between"><span className="text-[#777587]">Populer</span><span className="font-medium">{detailTarget.popular ? "Ya" : "Tidak"}</span></div>
+                  <div className="flex flex-col gap-1 border-t pt-2">
+                    <span className="text-[#777587]">Fitur:</span>
+                    <ul className="list-disc pl-4 text-gray-700">
+                      {Array.isArray(detailTarget.features) && detailTarget.features.length > 0 ? (
+                        detailTarget.features.map((feat, idx) => <li key={idx}>{feat}</li>)
+                      ) : (
+                        <li>Tidak ada fitur</li>
+                      )}
+                    </ul>
+                  </div>
+                  <div className="flex justify-between items-center border-t pt-2"><span className="text-[#777587]">Status</span><StatusBadge status={detailTarget.status} /></div>
                 </div>
                 <div className="flex justify-end border-t pt-3">
                   <button onClick={() => setDetailTarget(null)} className="rounded-lg bg-[#3525cd] px-4 py-2 text-sm font-semibold text-white">

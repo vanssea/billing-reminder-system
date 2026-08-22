@@ -11,7 +11,8 @@ export async function getClients(page, limit, search, status) {
   const query = params.toString();
   const response = await fetch(`${API_URL}${query ? `?${query}` : ""}`);
   if (!response.ok) throw new Error("Gagal mengambil data client");
-  return response.json();
+  const json = await response.json();
+  return json.data || json;
 }
 
 export async function getClientById(id) {
