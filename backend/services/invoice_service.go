@@ -656,18 +656,21 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 		}
 	}
 
-	// Invoice langsung dibuat dengan status SENT dianggap sudah dikirim:
-	// catat sent_at dan buat reminder yang masih relevan sejak invoice dibuat.
-	if invoice.Status == "SENT" {
-		sentAt := time.Now()
-		_, err = tx.Exec(context.Background(),
-			`UPDATE invoices SET sent_at = $1 WHERE id = $2`,
-			sentAt, invoice.ID,
-		)
-		if err != nil {
-			return nil, err
+	// Invoice yang dibuat langsung dengan status aktif ditagih (SENT/UNPAID)
+	// langsung mendapatkan reminder. sent_at hanya dicatat untuk SENT karena
+	// menandai invoice benar-benar sudah dikirim ke client.
+	if invoice.Status == "SENT" || invoice.Status == "UNPAID" {
+		if invoice.Status == "SENT" && invoice.SentAt == nil {
+			sentAt := time.Now()
+			_, err = tx.Exec(context.Background(),
+				`UPDATE invoices SET sent_at = $1 WHERE id = $2`,
+				sentAt, invoice.ID,
+			)
+			if err != nil {
+				return nil, err
+			}
+			invoice.SentAt = &sentAt
 		}
-		invoice.SentAt = &sentAt
 
 		err = CreateRemindersForInvoice(
 			context.Background(),
@@ -901,19 +904,26 @@ func (s *InvoiceService) UpdateInvoice(
 		}
 	}
 
-	// Reminder dibuat saat invoice pertama kali dikirim:
-	// transisi DRAFT -> SENT. sent_at hanya dicatat sekali,
-	// update berikutnya pada invoice yang sudah SENT tidak mengubahnya.
-	if previousStatus == "DRAFT" && invoice.Status == "SENT" {
-		sentAt := time.Now()
-		_, err = tx.Exec(context.Background(),
-			`UPDATE invoices SET sent_at = $1 WHERE id = $2`,
-			sentAt, id,
-		)
-		if err != nil {
-			return nil, err
+	// Reminder dibuat/dilengkapi set saat invoice pertama kali masuk status
+	// aktif ditagih (SENT atau UNPAID), mencakup transisi DRAFT -> SENT,
+	// DRAFT -> UNPAID, pembukaan invoice lama yang belum pernah aktif,
+	// atau pembaruan status PAID/CANCELLED ke SENT/UNPAID. Invoice yang
+	// sebelumnya CANCELLED tidak dihidupkan kembali reminder-nya.
+	billable := invoice.Status == "SENT" || invoice.Status == "UNPAID"
+	wasBillable := previousStatus == "SENT" || previousStatus == "UNPAID"
+	terminal := previousStatus == "PAID" || previousStatus == "CANCELLED"
+	if billable && !wasBillable && !terminal {
+		if invoice.Status == "SENT" && invoice.SentAt == nil {
+			sentAt := time.Now()
+			_, err = tx.Exec(context.Background(),
+				`UPDATE invoices SET sent_at = $1 WHERE id = $2`,
+				sentAt, id,
+			)
+			if err != nil {
+				return nil, err
+			}
+			invoice.SentAt = &sentAt
 		}
-		invoice.SentAt = &sentAt
 
 		err = CreateRemindersForInvoice(
 			context.Background(),

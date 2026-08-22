@@ -67,7 +67,8 @@ func (s *ReminderService) getDueReminders(ctx context.Context) ([]dueReminderRow
 		SELECT
 			r.id,
 			r.invoice_id,
-			c.phone
+			c.phone,
+			r.reminder_type
 		FROM reminders r
 		INNER JOIN invoices i ON i.id = r.invoice_id
 		INNER JOIN clients c ON c.id = i.client_id
