@@ -68,9 +68,9 @@ export default function AdminInvoices() {
         setLoading(true);
         setError("");
         const [invData, cliData, prdData] = await Promise.all([
-          getInvoices(), getClients(), getProducts(),
+          getInvoices(), getClients(1, 1000), getProducts(),
         ]);
-        if (!ignore) { setClients(cliData); setInvoices(invData); setProducts(prdData); }
+        if (!ignore) { setClients((cliData && cliData.data) || cliData || []); setInvoices(invData); setProducts(prdData); }
       } catch (err) { if (!ignore) setError(err.message || "Gagal memuat data"); }
       finally { if (!ignore) setLoading(false); }
     })();
