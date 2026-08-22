@@ -46,3 +46,5 @@ backend/preview.html
 *.njsproj
 *.sln
 *.sw?
+# Backend binary
+backend/*.exe
