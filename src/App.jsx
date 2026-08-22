@@ -1,4 +1,4 @@
-import { Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import ScrollToTop from "./components/ScrollToTop";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
@@ -16,7 +16,9 @@ import AdminDashboard from "./pages/admin/Dashboard";
 import AdminClients from "./pages/admin/Clients";
 import AdminProducts from "./pages/admin/Products";
 import AdminInvoices from "./pages/admin/Invoices";
+import AdminPayments from "./pages/admin/Payments";
 import SuperAdminDashboard from "./pages/superadmin/Dashboard";
+import PaymentManagement from "./pages/superadmin/PaymentManagement";
 
 // Static Pages
 import TentangKami from "./pages/static/TentangKami";
@@ -99,6 +101,24 @@ function App() {
           element={
             <ProtectedRoute roles={["SUPERADMIN"]}>
               <SuperAdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/payments"
+          element={
+            <ProtectedRoute roles={["ADMIN"]}>
+              <AdminPayments />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/superadmin/payments"
+          element={
+            <ProtectedRoute roles={["SUPERADMIN"]}>
+              <PaymentManagement />
             </ProtectedRoute>
           }
         />

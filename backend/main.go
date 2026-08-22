@@ -35,6 +35,7 @@ func main() {
 	authService := services.NewAuthService(db)
 	invoiceService := services.NewInvoiceService(db)
 	reminderService := services.NewReminderService(db)
+	paymentService := services.NewPaymentService(db)
 
 	// Membuat handler
 	clientHandler := handlers.NewClientHandler(clientService)
@@ -45,6 +46,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService)
 	invoiceHandler := handlers.NewInvoiceHandler(invoiceService)
 	reminderHandler := handlers.NewReminderHandler(reminderService)
+	paymentHandler := handlers.NewPaymentHandler(paymentService)
 
 	// Setup router
 	router := chi.NewRouter()
@@ -82,6 +84,7 @@ func main() {
 	routes.AuthRoutes(router, authHandler)
 	routes.InvoiceRoutes(router, invoiceHandler)
 	routes.ReminderRoutes(router, reminderHandler)
+	routes.PaymentRoutes(router, paymentHandler)
 
 	// Menjalankan server
 	server := &http.Server{
@@ -103,6 +106,7 @@ func main() {
 	log.Println("API Auth: http://localhost:8080/api/auth/me")
 	log.Println("API Invoices: http://localhost:8080/api/invoices")
 	log.Println("API Reminders: http://localhost:8080/api/reminders")
+	log.Println("API Payments: http://localhost:8080/api/payments")
 	log.Println("=================================")
 
 	err = server.ListenAndServe()
