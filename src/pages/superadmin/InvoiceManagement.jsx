@@ -1,4 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
+import Sidebar from "../../components/layout/Sidebar";
+import Header from "../../components/layout/Header";
 import {
   Search, X, Eye, FileText, Receipt,
   CheckCircle2, Clock, AlertTriangle, Users, Loader2,
@@ -220,9 +222,12 @@ const filteredInvoices = useMemo(() => {
   };
 
   return (
-    <div className="min-h-screen bg-[#fcf8ff] pt-16 md:pl-[280px]"> 
-      <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8"> 
-        <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#3525cd] to-[#5b44f3] p-6 text-white shadow-lg"> 
+    <div className="min-h-screen bg-[#fcf8ff] pt-16 md:pl-[280px]">
+      <Sidebar />
+      <Header role="superadmin" />
+
+      <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
+        <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#3525cd] to-[#5b44f3] p-6 text-white shadow-lg">
           <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" /> 
           <div className="absolute -bottom-8 right-20 h-28 w-28 rounded-full bg-white/10" /> 
           <div className="absolute right-40 -top-6 h-20 w-20 rounded-full bg-white/10" /> 
