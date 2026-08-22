@@ -8,11 +8,14 @@ import (
 
 	"billing-reminder-system/models"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type InvoiceService struct {
-	DB *pgxpool.Pool
+	DB       *pgxpool.Pool
+	WhatsApp *WhatsAppService
+	PDF      *PDFService
 }
 
 func NewInvoiceService(db *pgxpool.Pool) *InvoiceService {
@@ -447,6 +450,37 @@ func (s *InvoiceService) GetInvoiceByID(id string) (*models.Invoice, error) {
 		invoice.ActivityLogs = []models.ActivityLog{}
 	}
 
+	// =========================
+	// CLIENT (untuk halaman invoice publik)
+	// =========================
+
+	var client models.Client
+	err = s.DB.QueryRow(context.Background(), `
+		SELECT
+			id,
+			company_name,
+			pic_name,
+			email,
+			phone,
+			address,
+			status
+		FROM clients
+		WHERE id = $1
+	`, invoice.ClientID).Scan(
+		&client.ID,
+		&client.CompanyName,
+		&client.PICName,
+		&client.Email,
+		&client.Phone,
+		&client.Address,
+		&client.Status,
+	)
+	if err == nil {
+		invoice.Client = &client
+	} else if err != pgx.ErrNoRows {
+		return nil, err
+	}
+
 	return &invoice, nil
 }
 
@@ -651,6 +685,11 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 	if err != nil {
 		return nil, err
 	}
+
+	if invoice.Status == "SENT" && s.WhatsApp != nil {
+		go SendInvoiceCreatedWhatsApp(s.DB, s.WhatsApp, s.PDF, invoice.ID)
+	}
+
 	invoice.Items, err = s.fetchItems(invoice.ID)
 	if err != nil {
 		return nil, err
@@ -920,6 +959,10 @@ func (s *InvoiceService) UpdateInvoice(
 	err = tx.Commit(context.Background())
 	if err != nil {
 		return nil, err
+	}
+
+	if previousStatus == "DRAFT" && invoice.Status == "SENT" && s.WhatsApp != nil {
+		go SendInvoiceCreatedWhatsApp(s.DB, s.WhatsApp, s.PDF, invoice.ID)
 	}
 
 	// Ambil kembali seluruh relasi

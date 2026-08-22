@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Invoice {{.InvoiceNumber}}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @page { size: A4; margin: 0; }
+  body {
+    font-family: 'Segoe UI', Arial, Helvetica, sans-serif;
+    background: #f0f0f5;
+    color: #222222;
+    padding: 32px 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page {
+    width: 794px;
+    margin: 0 auto;
+    background: #ffffff;
+    box-shadow: 0 2px 24px rgba(25, 28, 30, 0.10);
+    display: flex;
+    flex-direction: column;
+    min-height: 1122px; /* tinggi A4 utk lebar 794px */
+  }
+
+  /* ===== Header ===== */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 32px;
+    padding: 40px 40px 32px;
+  }
+  .company-block { display: flex; align-items: flex-start; gap: 16px; }
+  .logo {
+    width: 48px; height: 48px; flex-shrink: 0;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #2563eb, #60a5fa);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .logo svg { width: 24px; height: 24px; fill: #ffffff; }
+  .company-name { font-size: 16px; font-weight: 700; line-height: 1.25; color: #222222; }
+  .company-tagline { font-size: 12px; color: #666666; margin-top: 4px; }
+  .company-address { font-size: 12px; color: #666666; margin-top: 8px; }
+  .contact-list { margin-top: 6px; }
+  .contact-row {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: #555555; margin-top: 4px;
+  }
+  .contact-row svg { width: 12px; height: 12px; flex-shrink: 0; stroke: #5b44f3; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  .invoice-meta { text-align: right; }
+  .invoice-title {
+    font-size: 42px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.14em; line-height: 1; color: #3525cd;
+  }
+  .invoice-number { margin-top: 8px; font-size: 14px; font-weight: 600; color: #222222; }
+  .meta-dates {
+    margin-top: 16px; border-top: 1px solid #D9D9D9;
+    padding-top: 12px; font-size: 12px;
+  }
+  .meta-row { display: flex; justify-content: flex-end; align-items: center; gap: 16px; }
+  .meta-row + .meta-row { margin-top: 6px; }
+  .meta-label { color: #666666; }
+  .meta-value { min-width: 130px; text-align: right; font-weight: 600; color: #222222; }
+
+  /* ===== Divider ===== */
+  .divider { margin: 0 40px; border-top: 2px solid #3525cd; }
+
+  /* ===== Info grid ===== */
+  .info-grid {
+    display: grid; grid-template-columns: 1fr 230px; gap: 40px;
+    padding: 32px 40px;
+  }
+  .section-label {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.18em; color: #3525cd; margin-bottom: 16px;
+  }
+  .client-company { font-size: 16px; font-weight: 700; color: #222222; }
+  .client-pic { margin-top: 4px; font-size: 12px; color: #555555; }
+  .client-email { margin-top: 8px; font-size: 12px; color: #555555; }
+  .client-address { margin-top: 4px; max-width: 300px; font-size: 12px; line-height: 1.625; color: #555555; }
+
+  .payment-col { position: relative; left: 15px; }
+  .bank-name { font-size: 16px; font-weight: 700; color: #222222; }
+  .payment-rows { margin-top: 8px; }
+  .payment-row { font-size: 12px; color: #555555; margin-top: 6px; white-space: nowrap; }
+  .payment-row .label { font-weight: 600; color: #444444; }
+
+  /* ===== Items table ===== */
+  .items-wrap { padding: 0 40px; }
+  table.items { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.items thead th {
+    background: #3525cd; color: #ffffff;
+    padding: 12px 16px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  table.items th.desc { text-align: left; }
+  table.items th.price { text-align: center; width: 96px; }
+  table.items th.qty { text-align: center; width: 64px; }
+  table.items th.total { text-align: right; width: 112px; }
+  table.items thead th { white-space: nowrap; }
+  table.items tbody td { padding: 16px; border-bottom: 1px solid #D9D9D9; color: #222222; }
+  table.items td.desc { text-align: left; }
+  table.items td.price { text-align: center; white-space: nowrap; }
+  table.items td.qty { text-align: center; white-space: nowrap; }
+  table.items td.total { text-align: right; font-weight: 600; white-space: nowrap; }
+  .item-name { font-weight: 600; color: #222222; }
+  .item-desc { margin-top: 2px; font-size: 12px; color: #666666; }
+
+  /* ===== Summary ===== */
+  .summary-wrap { display: flex; justify-content: flex-end; padding: 24px 40px 32px; }
+  .summary { width: 280px; }
+  .summary-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .summary-label { text-transform: uppercase; font-size: 12px; font-weight: 600; color: #666666; }
+  .summary-value { font-size: 14px; font-weight: 500; color: #222222; }
+  .grand-total {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #3525cd; color: #ffffff; padding: 12px 16px;
+  }
+  .grand-total .label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+  .grand-total .value { font-size: 18px; font-weight: 800; }
+
+  /* ===== Terms & Signature ===== */
+  .bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; padding: 32px 40px; }
+  .terms-list { padding-left: 20px; }
+  .terms-list li { font-size: 13px; line-height: 1.625; color: #555555; margin-bottom: 6px; }
+  .signature { margin-top: 48px; text-align: right; }
+  .signature-title { margin-bottom: 16px; font-size: 13px; letter-spacing: 0.3em; color: #999999; }
+  .signature-line { width: 240px; margin-left: auto; border-top: 1px solid #222222; padding-top: 8px; }
+  .signature-name { text-align: right; font-size: 14px; font-weight: 600; color: #222222; }
+  .signature-dept { text-align: right; font-size: 12px; color: #666666; }
+
+  /* ===== Footer ===== */
+  .footer { border-top: 1px solid #D9D9D9; padding: 20px 40px; text-align: center; margin-top: auto; }
+  .footer-name {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.18em; color: #3525cd;
+  }
+  .footer-thanks { margin-top: 4px; font-size: 11px; color: #666666; }
+
+  @media print {
+    body { background: #ffffff; padding: 0; }
+    .page { box-shadow: none; width: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="company-block">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      </div>
+      <div>
+        <p class="company-name">HostFlow</p>
+        <p class="company-tagline">Web Hosting &amp; Cloud Services</p>
+        <p class="company-address">surabaya, Indonesia</p>
+        <div class="contact-list">
+          <div class="contact-row">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+            billing@hostflow.com
+          </div>
+          <div class="contact-row">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            08123456789
+          </div>
+          <div class="contact-row">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+            hostflow.com
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="invoice-meta">
+      <h1 class="invoice-title">Invoice</h1>
+      <p class="invoice-number">#{{.InvoiceNumber}}</p>
+      <div class="meta-dates">
+        <div class="meta-row">
+          <span class="meta-label">Date</span>
+          <span class="meta-value">{{.InvoiceDate}}</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-label">Due</span>
+          <span class="meta-value">{{.DueDate}}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Invoice To / Payment -->
+  <div class="info-grid">
+    <div>
+      <p class="section-label">Invoice To</p>
+      <p class="client-company">{{.ClientCompany}}</p>
+      <p class="client-pic">{{.ClientPIC}}</p>
+      <p class="client-email">{{.ClientEmail}}</p>
+      <p class="client-address">{{.ClientAddress}}</p>
+    </div>
+
+    <div class="payment-col">
+      <p class="section-label">Payment Details</p>
+      <p class="bank-name">Bank Central Asia (BCA)</p>
+      <div class="payment-rows">
+        <p class="payment-row"><span class="label">Account Name:</span> PT HostFlow Indonesia</p>
+        <p class="payment-row"><span class="label">Account Number:</span> 1234567890</p>
+        <p class="payment-row"><span class="label">Payment Reference:</span> {{.InvoiceNumber}}</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Items -->
+  <div class="items-wrap">
+    <table class="items">
+      <thead>
+        <tr>
+          <th class="desc">Item Description</th>
+          <th class="price">Price</th>
+          <th class="qty">Qty</th>
+          <th class="total">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Items}}
+        <tr>
+          <td class="desc">
+            <p class="item-name">{{.Name}}</p>
+          </td>
+          <td class="price">{{.Price}}</td>
+          <td class="qty">{{.Qty}}</td>
+          <td class="total">{{.LineTotal}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Summary -->
+  <div class="summary-wrap">
+    <div class="summary">
+      <div class="summary-row">
+        <span class="summary-label">Subtotal</span>
+        <span class="summary-value">{{.Subtotal}}</span>
+      </div>
+      <div class="summary-row">
+        <span class="summary-label">Tax</span>
+        <span class="summary-value">{{.Tax}}</span>
+      </div>
+      <div class="summary-row">
+        <span class="summary-label">Discount</span>
+        <span class="summary-value">{{.Discount}}</span>
+      </div>
+      <div class="grand-total">
+        <span class="label">Total</span>
+        <span class="value">{{.GrandTotal}}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Terms & Signature -->
+  <div class="bottom-grid">
+    <div>
+      <p class="section-label">Terms &amp; Conditions</p>
+      <ol class="terms-list">
+        <li>Pembayaran dilakukan sebelum tanggal jatuh tempo.</li>
+        <li>Invoice ini berlaku sesuai jumlah yang tertera.</li>
+        <li>Keterlambatan pembayaran dapat dikenakan biaya tambahan.</li>
+      </ol>
+    </div>
+    <div class="signature">
+      <p class="signature-title">Authorized Signature</p>
+      <div class="signature-line">
+        <p class="signature-name">HostFlow</p>
+        <p class="signature-dept">Billing Department</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p class="footer-name">HostFlow</p>
+    <p class="footer-thanks">Thank you for your business.</p>
+  </div>
+
+</div>
+</body>
+</html>

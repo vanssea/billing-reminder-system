@@ -9,7 +9,8 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
+    const init = async () => {
+      const { data } = await supabase.auth.getSession();
       const session = data.session;
 
       if (session) {
@@ -23,7 +24,9 @@ export function AuthProvider({ children }) {
       }
 
       setLoading(false);
-    });
+    };
+
+    init();
   }, []);
 
   const signIn = async (email, password, remember) => {

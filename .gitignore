@@ -22,6 +22,15 @@ dist-ssr/
 # Local files
 *.local
 
+# WhatsApp session (kunci akun bot - JANGAN di-commit)
+backend/wa_sessions.db
+backend/wa_sessions.db-shm
+backend/wa_sessions.db-wal
+
+# PDF & preview hasil tes
+backend/test.pdf
+backend/preview.html
+
 # Environment
 .env
 .env.*
