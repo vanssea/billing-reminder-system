@@ -51,7 +51,6 @@ type Invoice struct {
 	CreatedBy     *string       `json:"created_by,omitempty"`
 	CreatedAt     time.Time     `json:"created_at"`
 	UpdatedAt     time.Time     `json:"updated_at"`
-	Client        *Client       `json:"client,omitempty"`
 	Items         []InvoiceItem `json:"items"`
 	Payments      []Payment     `json:"payments"`
 	Reminders     []Reminder    `json:"reminders"`

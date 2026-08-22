@@ -1,20 +1,18 @@
+const API_URL = "http://localhost:8080/api/admin/dashboard";
+
 export const getDashboardSummary = async () => {
+  const response = await fetch(API_URL);
+
+  if (!response.ok) {
+    throw new Error("Gagal memuat data dashboard");
+  }
+
+  const data = await response.json();
+
   return {
-    stats: {
-      total_invoices: 350,
-      paid_invoices: 280,
-      unpaid_invoices: 45,
-      overdue_invoices: 12,
-      pending_payments: 8
-    },
-    upcoming_invoices: [
-      { id: 'INV-2023-001', client: 'PT Makmur Sejahtera', due_date: '24 Okt 2023', amount: 1500000, status: 'Unpaid' },
-      { id: 'INV-2023-002', client: 'CV Bintang Terang', due_date: '25 Okt 2023', amount: 750000, status: 'Unpaid' }
-    ],
-    pending_verifications: [
-      { client: 'PT Sumber Baru', amount: 2000000 },
-      { client: 'CV Jaya Abadi', amount: 850000 }
-    ],
-    reminders_today: { scheduled: 120, sent: 95, failed: 5 }
+    ...data,
+    upcoming_invoices: data.upcoming_invoices || [],
+    pending_verifications: data.pending_verifications || [],
+    reminders_today: data.reminders_today || { scheduled: 0, sent: 0, failed: 0 },
   };
 };

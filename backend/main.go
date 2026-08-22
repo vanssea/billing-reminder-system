@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"net/http"
 	"time"
@@ -28,7 +27,6 @@ func main() {
 	defer db.Close()
 
 	// Membuat service
-	pdfService := services.NewPDFService()
 	clientService := services.NewClientService(db)
 	adminService := services.NewAdminService(db)
 	productService := services.NewProductService(db)
@@ -93,7 +91,7 @@ func main() {
 		Addr:         ":8080",
 		Handler:      router,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 120 * time.Second, // render PDF + upload WhatsApp bisa lama
+		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
