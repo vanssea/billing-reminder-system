@@ -12,4 +12,5 @@ func AdminRoutes(router *chi.Mux, adminHandler *handlers.AdminHandler) {
 	router.Get("/api/admins/{id}", adminHandler.GetAdminByID)
 	router.Put("/api/admins/{id}", adminHandler.UpdateAdmin)
 	router.Delete("/api/admins/{id}", adminHandler.DeleteAdmin)
+	router.Get("/api/admin/dashboard", adminHandler.GetDashboardSummary)
 }
