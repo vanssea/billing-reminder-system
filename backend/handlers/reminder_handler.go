@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"billing-reminder-system/services"
@@ -52,6 +53,10 @@ func (h *ReminderHandler) RetryReminder(w http.ResponseWriter, r *http.Request) 
 
 	reminder, err := h.Service.RetryReminder(r.Context(), id)
 	if err != nil {
+		if errors.Is(err, services.ErrReminderNotRetryable) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		http.Error(
 			w,
 			"Gagal melakukan retry reminder",

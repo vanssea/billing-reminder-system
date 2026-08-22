@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import Sidebar from "../../components/layout/Sidebar";
+import Header from "../../components/layout/Header";
 import {
   AlertCircle,
   Bell,
@@ -143,6 +145,8 @@ export default function ReminderManagement() {
 
   return (
     <div className="min-h-screen bg-[#fcf8ff] pt-16 md:pl-[280px]">
+      <Sidebar />
+      <Header role="superadmin" />
       <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
 
         {/* ===================================================
