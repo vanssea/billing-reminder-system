@@ -19,6 +19,7 @@ import AdminInvoices from "./pages/admin/Invoices";
 import AdminPayments from "./pages/admin/Payments";
 import AdminReminders from "./pages/admin/Reminders";
 import AdminReports from "./pages/admin/Reports";
+import AdminProfile from "./pages/admin/Profile";
 import SuperAdminDashboard from "./pages/superadmin/Dashboard";
 import AdminManagement from "./pages/superadmin/AdminManagement";
 import ClientManagement from "./pages/superadmin/ClientManagement";
@@ -128,6 +129,15 @@ function App() {
           element={
             <ProtectedRoute roles={["ADMIN"]}>
               <AdminPayments />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/profile"
+          element={
+            <ProtectedRoute roles={["ADMIN"]}>
+              <AdminProfile />
             </ProtectedRoute>
           }
         />
