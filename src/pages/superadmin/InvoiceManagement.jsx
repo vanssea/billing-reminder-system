@@ -76,7 +76,7 @@ export default function InvoiceManagement() {
   const stats = useMemo(() => [ 
     { title: "Total Invoice", value: invoices.length, description: "Semua invoice terdaftar", icon: FileText, className: "bg-gradient-to-r from-[#2563eb] to-[#3b82f6]" }, 
     { title: "Lunas", value: invoices.filter((i) => i.status === "PAID").length, description: "Invoice yang sudah dibayar", icon: CheckCircle2, className: "bg-gradient-to-r from-[#0d9488] to-[#14b8a6]" }, 
-    { title: "Belum Lunas", value: invoices.filter((i) => i.status === "UNPAID" || i.status === "SENT").length, description: "Invoice yang belum dibayar", icon: Clock, className: "bg-gradient-to-r from-[#f59e0b] to-[#fbbf24]" }, 
+    { title: "Belum Lunas", value: invoices.filter((i) => i.status === "UNPAID" || i.status === "SENT" || i.status === "OVERDUE").length, description: "Invoice yang belum dibayar (terkirim, belum bayar, terlambat)", icon: Clock, className: "bg-gradient-to-r from-[#f59e0b] to-[#fbbf24]" },
     { title: "Terlambat", value: invoices.filter((i) => i.status === "OVERDUE").length, description: "Invoice yang sudah jatuh tempo", icon: AlertTriangle, className: "bg-gradient-to-r from-[#dc2626] to-[#ef4444]" }, 
   ], [invoices]); 
  

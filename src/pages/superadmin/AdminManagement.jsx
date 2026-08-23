@@ -30,7 +30,6 @@ const emptyForm = {
   email: "",
   phone: "",
   password: "",
-  role: "ADMIN",
 };
 
 const toDate = (value) =>
@@ -38,7 +37,6 @@ const toDate = (value) =>
 
 const roleLabels = {
   ADMIN: "Admin",
-  SUPERADMIN: "Super Admin",
 };
 
 const getRoleLabel = (role) =>
@@ -153,7 +151,6 @@ export default function AdminManagement() {
       email: admin.email || "",
       phone: admin.phone || "",
       password: "",
-      role: admin.role || "ADMIN",
     });
     setErrors({});
     setModalOpen(true);
@@ -190,7 +187,7 @@ export default function AdminManagement() {
       if (editingId) {
         await updateAdmin(editingId, {
           full_name: form.full_name,
-          role: form.role,
+          role: "ADMIN",
           phone: form.phone || null,
         });
         setSuccess("Data admin berhasil diperbarui.");

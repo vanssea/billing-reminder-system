@@ -11,7 +11,6 @@ func PaymentRoutes(router *chi.Mux, handler *handlers.PaymentHandler) {
 		r.Get("/", handler.GetPayments)
 		r.Get("/{id}", handler.GetPaymentByID)
 
-		r.Put("/{id}/verify", handler.VerifyPayment)
 		r.Put("/{id}/approve", handler.ApprovePayment)
 		r.Put("/{id}/reject", handler.RejectPayment)
 	})

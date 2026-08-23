@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Search, X, Eye, Receipt, CheckCircle2, Clock,
-  AlertTriangle, Users, Loader2, BadgeCheck, XCircle,
+  AlertTriangle, Users, Loader2, XCircle,
   Image as ImageIcon, Wallet, ExternalLink,
 } from "lucide-react";
-import { getPayments, verifyPayment, approvePayment, rejectPayment } from "../../services/paymentApi";
+import { getPayments, approvePayment, rejectPayment } from "../../services/paymentApi";
 import Sidebar from "../layout/Sidebar";
 import Header from "../layout/Header";
 import { useAuth } from "../../context/AuthContext";
@@ -14,8 +14,7 @@ const formatDate = (d) => d ? new Date(d).toLocaleDateString("id-ID", { day: "nu
 const formatDateTime = (d) => d ? new Date(d).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
 
 const statusConfig = {
-  PENDING: { label: "Menunggu Verifikasi", dot: "bg-[#f59e0b]", bg: "bg-[#fffbeb]", text: "text-[#d97706]", border: "border-[#fde68a]" },
-  VERIFIED: { label: "Terverifikasi", dot: "bg-[#3b82f6]", bg: "bg-[#eff6ff]", text: "text-[#2563eb]", border: "border-[#bfdbfe]" },
+  PENDING: { label: "Menunggu Keputusan", dot: "bg-[#f59e0b]", bg: "bg-[#fffbeb]", text: "text-[#d97706]", border: "border-[#fde68a]" },
   APPROVED: { label: "Disetujui", dot: "bg-[#10b981]", bg: "bg-[#ecfdf5]", text: "text-[#059669]", border: "border-[#a7f3d0]" },
   REJECTED: { label: "Ditolak", dot: "bg-[#ef4444]", bg: "bg-[#fef2f2]", text: "text-[#dc2626]", border: "border-[#fecdd3]" },
 };
@@ -64,7 +63,6 @@ export default function PaymentsView({ role = "admin" }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [detailTarget, setDetailTarget] = useState(null);
-  const [verifyTarget, setVerifyTarget] = useState(null);
   const [approveTarget, setApproveTarget] = useState(null);
   const [rejectTarget, setRejectTarget] = useState(null);
   const [rejectNotes, setRejectNotes] = useState("");
@@ -87,9 +85,9 @@ export default function PaymentsView({ role = "admin" }) {
   }, []);
 
   useEffect(() => {
-    document.body.style.overflow = detailTarget || verifyTarget || approveTarget || rejectTarget ? "hidden" : "";
+    document.body.style.overflow = detailTarget || approveTarget || rejectTarget ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [detailTarget, verifyTarget, approveTarget, rejectTarget]);
+  }, [detailTarget, approveTarget, rejectTarget]);
 
   useEffect(() => {
     if (!success) return;
@@ -99,7 +97,7 @@ export default function PaymentsView({ role = "admin" }) {
 
   const stats = useMemo(() => [
     { title: "Total Pembayaran", value: payments.length, description: "Semua bukti pembayaran masuk", icon: Wallet, className: "bg-gradient-to-r from-[#3525cd] to-[#5b44f3]" },
-    { title: "Menunggu", value: payments.filter((p) => p.status === "PENDING").length, description: "Perlu diverifikasi admin", icon: Clock, className: "bg-gradient-to-r from-[#f59e0b] to-[#fbbf24]" },
+    { title: "Menunggu", value: payments.filter((p) => p.status === "PENDING").length, description: "Perlu keputusan admin", icon: Clock, className: "bg-gradient-to-r from-[#f59e0b] to-[#fbbf24]" },
     { title: "Disetujui", value: payments.filter((p) => p.status === "APPROVED").length, description: "Pembayaran berhasil dikonfirmasi", icon: CheckCircle2, className: "bg-gradient-to-r from-[#0d9488] to-[#14b8a6]" },
     { title: "Ditolak", value: payments.filter((p) => p.status === "REJECTED").length, description: "Pembayaran tidak valid", icon: XCircle, className: "bg-gradient-to-r from-[#dc2626] to-[#ef4444]" },
   ], [payments]);
@@ -118,21 +116,6 @@ export default function PaymentsView({ role = "admin" }) {
   const replacePayment = (updated) => {
     setPayments((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
     setDetailTarget((prev) => (prev && prev.id === updated.id ? updated : prev));
-  };
-
-  const handleVerify = async () => {
-    if (!verifyTarget) return;
-    setSaving(true);
-    try {
-      const updated = await verifyPayment(verifyTarget.id, user?.id || null);
-      replacePayment(updated);
-      setSuccess(`Bukti pembayaran ${verifyTarget.invoice_number} berhasil diverifikasi.`);
-      setVerifyTarget(null);
-    } catch (err) {
-      setError(err.message || "Gagal memverifikasi pembayaran");
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleApprove = async () => {
@@ -173,8 +156,7 @@ export default function PaymentsView({ role = "admin" }) {
     }
   };
 
-  const canVerify = (p) => p.status === "PENDING";
-  const canDecide = (p) => p.status === "PENDING" || p.status === "VERIFIED";
+  const canDecide = (p) => p.status === "PENDING";
 
   const panelTitle = role === "superadmin" ? "Payment Management" : "Payments";
 
@@ -193,7 +175,7 @@ export default function PaymentsView({ role = "admin" }) {
             <div>
               <p className="text-sm font-medium text-white/80">{role === "superadmin" ? "Super Admin Panel" : "Admin Panel"}</p>
               <h1 className="mt-1 text-2xl font-bold">{panelTitle}</h1>
-              <p className="mt-1 text-sm text-white/80">Verifikasi bukti pembayaran client dan setujui pembayaran.</p>
+              <p className="mt-1 text-sm text-white/80">Tinjau bukti pembayaran client lalu setujui atau tolak.</p>
             </div>
           </div>
         </div>
@@ -250,7 +232,7 @@ export default function PaymentsView({ role = "admin" }) {
               />
             </div>
             <div className="flex flex-1 items-center gap-1 rounded-xl bg-[#f3f1f7] p-1">
-              {[{ key: "ALL", label: "Semua" }, { key: "PENDING", label: "Menunggu" }, { key: "VERIFIED", label: "Terverifikasi" }, { key: "APPROVED", label: "Disetujui" }, { key: "REJECTED", label: "Ditolak" }].map((s) => (
+              {[{ key: "ALL", label: "Semua" }, { key: "PENDING", label: "Menunggu" }, { key: "APPROVED", label: "Disetujui" }, { key: "REJECTED", label: "Ditolak" }].map((s) => (
                 <button
                   key={s.key}
                   type="button"
@@ -325,9 +307,6 @@ export default function PaymentsView({ role = "admin" }) {
                           <div className="flex items-center justify-end gap-1">
                             <button type="button" onClick={() => setDetailTarget(p)} title="Detail & Bukti" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#3525cd]/10 text-[#3525cd] transition hover:bg-[#3525cd]/20">
                               <Eye className="h-4 w-4" />
-                            </button>
-                            <button type="button" onClick={() => setVerifyTarget(p)} disabled={!canVerify(p)} title="Verifikasi Bukti" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#3b82f6]/10 text-[#2563eb] transition hover:bg-[#3b82f6]/20 disabled:cursor-not-allowed disabled:opacity-40">
-                              <BadgeCheck className="h-4 w-4" />
                             </button>
                             <button type="button" onClick={() => setApproveTarget(p)} disabled={!canDecide(p)} title="Setujui" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#10b981]/10 text-[#059669] transition hover:bg-[#10b981]/20 disabled:cursor-not-allowed disabled:opacity-40">
                               <CheckCircle2 className="h-4 w-4" />
@@ -420,11 +399,6 @@ export default function PaymentsView({ role = "admin" }) {
 
                 {canDecide(detailTarget) && (
                   <div className="flex flex-wrap justify-end gap-3 border-t border-[#e0e3e5] pt-4">
-                    {canVerify(detailTarget) && (
-                      <button type="button" onClick={() => setVerifyTarget(detailTarget)} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#3b82f6] to-[#60a5fa] px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:shadow-lg">
-                        <BadgeCheck size={16} /> Verifikasi
-                      </button>
-                    )}
                     <button type="button" onClick={() => setApproveTarget(detailTarget)} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#059669] to-[#10b981] px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:shadow-lg">
                       <CheckCircle2 size={16} /> Setujui
                     </button>
@@ -433,29 +407,6 @@ export default function PaymentsView({ role = "admin" }) {
                     </button>
                   </div>
                 )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Verify Confirmation */}
-        {verifyTarget && (
-          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={() => setVerifyTarget(null)}>
-            <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-              <div className="bg-gradient-to-r from-[#3b82f6] to-[#60a5fa] px-6 py-5 text-white">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20"><BadgeCheck size={18} /></div>
-                  <h2 className="text-lg font-bold">Verifikasi Pembayaran?</h2>
-                </div>
-              </div>
-              <div className="p-6">
-                <p className="text-sm leading-relaxed text-[#464555]">
-                  Tandai bukti pembayaran invoice <span className="font-bold">{verifyTarget.invoice_number}</span> sebagai terverifikasi? Setelah itu kamu bisa menyetujui atau menolaknya.
-                </p>
-              </div>
-              <div className="flex justify-end gap-3 border-t border-[#e0e3e5] px-6 py-4">
-                <button type="button" onClick={() => setVerifyTarget(null)} className="rounded-xl border border-[#c7c4d8] px-5 py-2.5 text-sm font-semibold text-[#464555] transition hover:bg-[#eceef0]">Batal</button>
-                <button type="button" onClick={handleVerify} disabled={saving} className="rounded-xl bg-gradient-to-r from-[#3b82f6] to-[#60a5fa] px-5 py-2.5 text-sm font-semibold text-white shadow-md disabled:opacity-50">{saving ? "Memverifikasi..." : "Verifikasi"}</button>
               </div>
             </div>
           </div>

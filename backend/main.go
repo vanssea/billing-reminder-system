@@ -47,6 +47,7 @@ func main() {
 	reminderService.PDF = pdfService
 	paymentService := services.NewPaymentService(db)
 	paymentService.WhatsApp = waService
+	appNotificationService := services.NewAppNotificationService(db)
 
 	// Membuat handler
 	clientHandler := handlers.NewClientHandler(clientService)
@@ -59,6 +60,7 @@ func main() {
 	reminderHandler := handlers.NewReminderHandler(reminderService)
 	paymentHandler := handlers.NewPaymentHandler(paymentService)
 	whatsappHandler := handlers.NewWhatsAppHandler(waService, pdfService)
+	appNotificationHandler := handlers.NewAppNotificationHandler(appNotificationService)
 
 	// Setup router
 	router := chi.NewRouter()
@@ -98,9 +100,13 @@ func main() {
 	routes.ReminderRoutes(router, reminderHandler)
 	routes.PaymentRoutes(router, paymentHandler)
 	routes.WhatsAppRoutes(router, whatsappHandler)
+	routes.AppNotificationRoutes(router, appNotificationHandler)
 
 	// Menjalankan scheduler reminder di background (H-30 s/d H-1 + overdue)
 	go reminderService.StartReminderScheduler(context.Background())
+
+	// Menjalankan watcher notifikasi invoice overdue untuk lonceng admin
+	go appNotificationService.StartOverdueWatcher(context.Background())
 
 	// Menjalankan server
 	server := &http.Server{
@@ -123,6 +129,7 @@ func main() {
 	log.Println("API Invoices: http://localhost:8080/api/invoices")
 	log.Println("API Reminders: http://localhost:8080/api/reminders")
 	log.Println("API Payments: http://localhost:8080/api/payments")
+	log.Println("API Notifications: http://localhost:8080/api/notifications")
 	log.Println("=================================")
 
 	err = server.ListenAndServe()

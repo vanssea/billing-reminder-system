@@ -21,10 +21,6 @@ type PaymentDetail struct {
 	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
-type VerifyPaymentRequest struct {
-	VerifiedBy *string `json:"verified_by,omitempty"`
-}
-
 type ApprovePaymentRequest struct {
 	VerifiedBy *string `json:"verified_by,omitempty"`
 }
