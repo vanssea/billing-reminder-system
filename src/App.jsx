@@ -119,6 +119,11 @@ function App() {
           element={
             <ProtectedRoute roles={["ADMIN"]}>
               <AdminReports />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/admin/payments"
           element={
             <ProtectedRoute roles={["ADMIN"]}>

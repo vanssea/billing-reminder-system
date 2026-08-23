@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Search,
   Send,
+  SkipForward,
   X,
 } from "lucide-react";
 
@@ -70,6 +71,15 @@ const tabs = [
     match: (r) => r.status === "FAILED",
     emptyTitle: "Tidak ada reminder gagal",
     emptyText: "Bagus! Semua reminder berhasil dikirim tanpa kendala.",
+  },
+  {
+    key: "DILEWATI",
+    label: "Dilewati",
+    description: "Reminder yang dilewati sistem",
+    icon: SkipForward,
+    match: (r) => r.status === "SKIPPED",
+    emptyTitle: "Tidak ada reminder dilewati",
+    emptyText: "Reminder yang dilewati sistem akan tampil di sini.",
   },
   {
     key: "HISTORY",
@@ -141,7 +151,8 @@ export default function AdminReminders() {
     const pending = reminders.filter((r) => r.status === "PENDING").length;
     const sent = reminders.filter((r) => r.status === "SENT").length;
     const failed = reminders.filter((r) => r.status === "FAILED").length;
-    return { total, pending, sent, failed };
+    const skipped = reminders.filter((r) => r.status === "SKIPPED").length;
+    return { total, pending, sent, failed, skipped };
   }, [reminders]);
 
   const tabCounts = useMemo(
@@ -149,6 +160,7 @@ export default function AdminReminders() {
       JADWAL: stats.pending,
       TERKIRIM: stats.sent,
       GAGAL: stats.failed,
+      DILEWATI: stats.skipped,
       HISTORY: stats.total,
     }),
     [stats]
@@ -213,7 +225,7 @@ export default function AdminReminders() {
             TABS — Jadwal / Terkirim / Gagal / History
         =================================================== */}
 
-        <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.key;
