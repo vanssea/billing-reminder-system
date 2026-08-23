@@ -60,40 +60,6 @@ func (h *PaymentHandler) GetPaymentByID(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(payment)
 }
 
-func (h *PaymentHandler) VerifyPayment(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-
-	var req models.VerifyPaymentRequest
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
-		http.Error(w, "Request tidak valid", http.StatusBadRequest)
-		return
-	}
-
-	payment, err := h.Service.VerifyPayment(r.Context(), id, req)
-
-	if err != nil {
-		message := err.Error()
-
-		if strings.Contains(message, "tidak ditemukan") {
-			http.Error(w, message, http.StatusNotFound)
-			return
-		}
-
-		if strings.Contains(message, "hanya pembayaran") {
-			http.Error(w, message, http.StatusBadRequest)
-			return
-		}
-
-		h.writePaymentError(w, err)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-
-	json.NewEncoder(w).Encode(payment)
-}
-
 func (h *PaymentHandler) ApprovePayment(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 

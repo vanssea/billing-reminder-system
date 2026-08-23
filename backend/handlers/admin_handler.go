@@ -111,3 +111,21 @@ func (h *AdminHandler) GetDashboardSummary(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(summary)
 }
+
+func (h *AdminHandler) GetSuperAdminDashboard(w http.ResponseWriter, r *http.Request) {
+	dashboard, err := h.Service.GetSuperAdminDashboard()
+	if err != nil {
+		http.Error(w, "Gagal memuat dashboard superadmin: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(dashboard)
+}
+
+func (h *AdminHandler) SuperAdminStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "super admin route aktif tanpa login",
+	})
+}

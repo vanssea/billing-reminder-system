@@ -113,6 +113,7 @@ func (s *ReminderService) processReminder(ctx context.Context, r dueReminderRow)
 		if updateErr != nil {
 			return fmt.Errorf("%v (gagal update status: %v)", err, updateErr)
 		}
+		go NotifyReminderFailed(s.DB, r.ID)
 		return err
 	}
 

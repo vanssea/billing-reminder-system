@@ -20,23 +20,6 @@ export async function getPaymentById(id) {
   return response.json();
 }
 
-export async function verifyPayment(id, verifiedBy = null) {
-  const response = await fetch(`${API_URL}/${id}/verify`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ verified_by: verifiedBy }),
-  });
-
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Gagal memverifikasi pembayaran");
-  }
-
-  return response.json();
-}
-
 export async function approvePayment(id, verifiedBy = null) {
   const response = await fetch(`${API_URL}/${id}/approve`, {
     method: "PUT",

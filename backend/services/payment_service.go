@@ -132,37 +132,6 @@ func (s *PaymentService) GetPaymentByID(ctx context.Context, id string) (*models
 }
 
 // ============================================================
-// VERIFY PAYMENT (PENDING -> VERIFIED)
-// ============================================================
-
-func (s *PaymentService) VerifyPayment(ctx context.Context, id string, req models.VerifyPaymentRequest) (*models.PaymentDetail, error) {
-	var currentStatus string
-
-	err := s.DB.QueryRow(ctx, `SELECT status FROM payments WHERE id = $1 FOR UPDATE`, id).Scan(&currentStatus)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("pembayaran tidak ditemukan")
-		}
-		return nil, err
-	}
-
-	if currentStatus != "PENDING" {
-		return nil, fmt.Errorf("hanya pembayaran berstatus PENDING yang bisa diverifikasi")
-	}
-
-	_, err = s.DB.Exec(ctx, `
-		UPDATE payments
-		SET status = 'VERIFIED', verified_by = $1, verified_at = now(), updated_at = now()
-		WHERE id = $2
-	`, req.VerifiedBy, id)
-	if err != nil {
-		return nil, err
-	}
-
-	return s.GetPaymentByID(ctx, id)
-}
-
-// ============================================================
 // APPROVE PAYMENT -> INVOICE PAID
 // ============================================================
 
@@ -225,6 +194,7 @@ func (s *PaymentService) ApprovePayment(ctx context.Context, id string, req mode
 	}
 
 	go sendPaymentApprovedWhatsApp(s.DB, s.WhatsApp, id)
+	go NotifyPaymentApproved(s.DB, id)
 
 	return s.GetPaymentByID(ctx, id)
 }
@@ -278,6 +248,7 @@ func (s *PaymentService) RejectPayment(ctx context.Context, id string, req model
 		reason = *req.Notes
 	}
 	go sendPaymentRejectedWhatsApp(s.DB, s.WhatsApp, id, reason)
+	go NotifyPaymentRejected(s.DB, id, reason)
 
 	return s.GetPaymentByID(ctx, id)
 }

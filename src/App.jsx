@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+
 import ScrollToTop from "./components/ScrollToTop";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
@@ -10,8 +11,10 @@ import Register from "./pages/auth/Register";
 import LupaPassword from "./pages/auth/LupaPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 
-// Dashboard
+// Client
 import ClientDashboard from "./pages/client/Dashboard";
+
+// Admin
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminClients from "./pages/admin/Clients";
 import AdminProducts from "./pages/admin/Products";
@@ -20,6 +23,8 @@ import AdminPayments from "./pages/admin/Payments";
 import AdminReminders from "./pages/admin/Reminders";
 import AdminReports from "./pages/admin/Reports";
 import AdminProfile from "./pages/admin/Profile";
+
+// Super Admin
 import SuperAdminDashboard from "./pages/superadmin/Dashboard";
 import AdminManagement from "./pages/superadmin/AdminManagement";
 import ClientManagement from "./pages/superadmin/ClientManagement";
@@ -60,7 +65,7 @@ function App() {
         {/* ==================== LANDING ==================== */}
         <Route path="/" element={<LandingPage />} />
 
-        {/* ==================== DASHBOARD ==================== */}
+        {/* ==================== CLIENT ==================== */}
         <Route
           path="/client/dashboard"
           element={
@@ -70,6 +75,7 @@ function App() {
           }
         />
 
+        {/* ==================== ADMIN ==================== */}
         <Route
           path="/admin/dashboard"
           element={
@@ -82,7 +88,7 @@ function App() {
         <Route
           path="/admin/clients"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={["ADMIN"]}>
               <AdminClients />
             </ProtectedRoute>
           }
@@ -91,7 +97,7 @@ function App() {
         <Route
           path="/admin/products"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={["ADMIN"]}>
               <AdminProducts />
             </ProtectedRoute>
           }
@@ -100,8 +106,17 @@ function App() {
         <Route
           path="/admin/invoices"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={["ADMIN"]}>
               <AdminInvoices />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/payments"
+          element={
+            <ProtectedRoute roles={["ADMIN"]}>
+              <AdminPayments />
             </ProtectedRoute>
           }
         />
@@ -125,15 +140,6 @@ function App() {
         />
 
         <Route
-          path="/admin/payments"
-          element={
-            <ProtectedRoute roles={["ADMIN"]}>
-              <AdminPayments />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
           path="/admin/profile"
           element={
             <ProtectedRoute roles={["ADMIN"]}>
@@ -142,6 +148,7 @@ function App() {
           }
         />
 
+        {/* ==================== SUPER ADMIN ==================== */}
         <Route
           path="/superadmin/dashboard"
           element={
@@ -235,8 +242,14 @@ function App() {
         <Route path="/dokumentasi" element={<Dokumentasi />} />
         <Route path="/panduan-api" element={<PanduanAPI />} />
         <Route path="/komunitas" element={<Komunitas />} />
-        <Route path="/kebijakan-privasi" element={<KebijakanPrivasi />} />
-        <Route path="/syarat-ketentuan" element={<SyaratKetentuan />} />
+        <Route
+          path="/kebijakan-privasi"
+          element={<KebijakanPrivasi />}
+        />
+        <Route
+          path="/syarat-ketentuan"
+          element={<SyaratKetentuan />}
+        />
 
         {/* ==================== FALLBACK ==================== */}
         <Route path="*" element={<Navigate to="/" replace />} />
