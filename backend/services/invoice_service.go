@@ -8,11 +8,14 @@ import (
 
 	"billing-reminder-system/models"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type InvoiceService struct {
-	DB *pgxpool.Pool
+	DB       *pgxpool.Pool
+	WhatsApp *WhatsAppService
+	PDF      *PDFService
 }
 
 func NewInvoiceService(db *pgxpool.Pool) *InvoiceService {
@@ -447,6 +450,37 @@ func (s *InvoiceService) GetInvoiceByID(id string) (*models.Invoice, error) {
 		invoice.ActivityLogs = []models.ActivityLog{}
 	}
 
+	// =========================
+	// CLIENT (untuk halaman invoice publik)
+	// =========================
+
+	var client models.Client
+	err = s.DB.QueryRow(context.Background(), `
+		SELECT
+			id,
+			company_name,
+			pic_name,
+			email,
+			phone,
+			address,
+			status
+		FROM clients
+		WHERE id = $1
+	`, invoice.ClientID).Scan(
+		&client.ID,
+		&client.CompanyName,
+		&client.PICName,
+		&client.Email,
+		&client.Phone,
+		&client.Address,
+		&client.Status,
+	)
+	if err == nil {
+		invoice.Client = &client
+	} else if err != pgx.ErrNoRows {
+		return nil, err
+	}
+
 	return &invoice, nil
 }
 
@@ -622,18 +656,21 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 		}
 	}
 
-	// Invoice langsung dibuat dengan status SENT dianggap sudah dikirim:
-	// catat sent_at dan buat reminder yang masih relevan sejak invoice dibuat.
-	if invoice.Status == "SENT" {
-		sentAt := time.Now()
-		_, err = tx.Exec(context.Background(),
-			`UPDATE invoices SET sent_at = $1 WHERE id = $2`,
-			sentAt, invoice.ID,
-		)
-		if err != nil {
-			return nil, err
+	// Invoice yang dibuat langsung dengan status aktif ditagih (SENT/UNPAID)
+	// langsung mendapatkan reminder. sent_at hanya dicatat untuk SENT karena
+	// menandai invoice benar-benar sudah dikirim ke client.
+	if invoice.Status == "SENT" || invoice.Status == "UNPAID" {
+		if invoice.Status == "SENT" && invoice.SentAt == nil {
+			sentAt := time.Now()
+			_, err = tx.Exec(context.Background(),
+				`UPDATE invoices SET sent_at = $1 WHERE id = $2`,
+				sentAt, invoice.ID,
+			)
+			if err != nil {
+				return nil, err
+			}
+			invoice.SentAt = &sentAt
 		}
-		invoice.SentAt = &sentAt
 
 		err = CreateRemindersForInvoice(
 			context.Background(),
@@ -651,6 +688,11 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 	if err != nil {
 		return nil, err
 	}
+
+	if invoice.Status == "SENT" && s.WhatsApp != nil {
+		go SendInvoiceCreatedWhatsApp(s.DB, s.WhatsApp, s.PDF, invoice.ID)
+	}
+
 	invoice.Items, err = s.fetchItems(invoice.ID)
 	if err != nil {
 		return nil, err
@@ -862,19 +904,26 @@ func (s *InvoiceService) UpdateInvoice(
 		}
 	}
 
-	// Reminder dibuat saat invoice pertama kali dikirim:
-	// transisi DRAFT -> SENT. sent_at hanya dicatat sekali,
-	// update berikutnya pada invoice yang sudah SENT tidak mengubahnya.
-	if previousStatus == "DRAFT" && invoice.Status == "SENT" {
-		sentAt := time.Now()
-		_, err = tx.Exec(context.Background(),
-			`UPDATE invoices SET sent_at = $1 WHERE id = $2`,
-			sentAt, id,
-		)
-		if err != nil {
-			return nil, err
+	// Reminder dibuat/dilengkapi set saat invoice pertama kali masuk status
+	// aktif ditagih (SENT atau UNPAID), mencakup transisi DRAFT -> SENT,
+	// DRAFT -> UNPAID, pembukaan invoice lama yang belum pernah aktif,
+	// atau pembaruan status PAID/CANCELLED ke SENT/UNPAID. Invoice yang
+	// sebelumnya CANCELLED tidak dihidupkan kembali reminder-nya.
+	billable := invoice.Status == "SENT" || invoice.Status == "UNPAID"
+	wasBillable := previousStatus == "SENT" || previousStatus == "UNPAID"
+	terminal := previousStatus == "PAID" || previousStatus == "CANCELLED"
+	if billable && !wasBillable && !terminal {
+		if invoice.Status == "SENT" && invoice.SentAt == nil {
+			sentAt := time.Now()
+			_, err = tx.Exec(context.Background(),
+				`UPDATE invoices SET sent_at = $1 WHERE id = $2`,
+				sentAt, id,
+			)
+			if err != nil {
+				return nil, err
+			}
+			invoice.SentAt = &sentAt
 		}
-		invoice.SentAt = &sentAt
 
 		err = CreateRemindersForInvoice(
 			context.Background(),
@@ -920,6 +969,10 @@ func (s *InvoiceService) UpdateInvoice(
 	err = tx.Commit(context.Background())
 	if err != nil {
 		return nil, err
+	}
+
+	if previousStatus == "DRAFT" && invoice.Status == "SENT" && s.WhatsApp != nil {
+		go SendInvoiceCreatedWhatsApp(s.DB, s.WhatsApp, s.PDF, invoice.ID)
 	}
 
 	// Ambil kembali seluruh relasi

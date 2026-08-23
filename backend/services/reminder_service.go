@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 	_ "time/tzdata"
 
@@ -10,6 +12,8 @@ import (
 
 	"billing-reminder-system/models"
 )
+
+var ErrReminderNotRetryable = errors.New("invoice sudah PAID atau CANCELLED, reminder tidak dapat di-retry")
 
 // jakartaLocation adalah zona waktu Asia/Jakarta (WIB, UTC+7).
 // Fallback ke FixedZone jika tzdata dari sistem tidak tersedia.
@@ -34,7 +38,9 @@ var reminderTypeOffsets = []struct {
 }
 
 type ReminderService struct {
-	DB *pgxpool.Pool
+	DB       *pgxpool.Pool
+	WhatsApp *WhatsAppService
+	PDF      *PDFService
 }
 
 func NewReminderService(db *pgxpool.Pool) *ReminderService {
@@ -106,6 +112,33 @@ func (s *ReminderService) RetryReminder(
 	ctx context.Context,
 	id string,
 ) (*models.Reminder, error) {
+	var reminderStatus string
+	var invoiceStatus string
+
+	err := s.DB.QueryRow(ctx, `
+		SELECT r.status, i.status
+		FROM reminders r
+		INNER JOIN invoices i ON i.id = r.invoice_id
+		WHERE r.id = $1
+	`, id).Scan(&reminderStatus, &invoiceStatus)
+	if err != nil {
+		return nil, err
+	}
+
+	if invoiceStatus == "PAID" || invoiceStatus == "CANCELLED" {
+		if reminderStatus == "PENDING" || reminderStatus == "FAILED" {
+			_, uerr := s.DB.Exec(ctx, `
+				UPDATE reminders
+				SET status = 'SKIPPED'
+				WHERE id = $1 AND sent_at IS NULL AND status IN ('PENDING', 'FAILED')
+			`, id)
+			if uerr != nil {
+				return nil, uerr
+			}
+		}
+		return nil, fmt.Errorf("%w: invoice berstatus %s", ErrReminderNotRetryable, invoiceStatus)
+	}
+
 	query := `
 		UPDATE reminders
 		SET
@@ -125,7 +158,7 @@ func (s *ReminderService) RetryReminder(
 
 	var reminder models.Reminder
 
-	err := s.DB.QueryRow(ctx, query, id).Scan(
+	err = s.DB.QueryRow(ctx, query, id).Scan(
 		&reminder.ID,
 		&reminder.InvoiceID,
 		&reminder.ScheduledAt,
