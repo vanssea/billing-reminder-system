@@ -145,7 +145,7 @@ export default function AdminInvoices() {
 
   const openEdit = async (inv) => {
     try {
-      const detail = await getInvoiceById(inv.id);
+      const detail = await getInvoiceById(inv.id, accessToken);
       setEditingId(inv.id);
       setForm({
         invoice_number: detail.invoice_number || "",
@@ -449,7 +449,7 @@ export default function AdminInvoices() {
                         <td className="px-4 py-3"><StatusBadge status={inv.status} /></td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
-                            <button type="button" onClick={async () => { try { const detail = await getInvoiceById(inv.id); setDetailTarget(detail); } catch (err) { setError(err.message); } }} title="Detail" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#3525cd]/10 text-[#3525cd] transition hover:bg-[#3525cd]/20">
+                            <button type="button" onClick={async () => { try { const detail = await getInvoiceById(inv.id, accessToken); setDetailTarget(detail); } catch (err) { setError(err.message); } }} title="Detail" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#3525cd]/10 text-[#3525cd] transition hover:bg-[#3525cd]/20">
                               <Eye className="h-4 w-4" />
                             </button>
                             <button type="button" onClick={() => openEdit(inv)} title="Edit" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#f59e0b]/10 text-[#d97706] transition hover:bg-[#f59e0b]/20">
