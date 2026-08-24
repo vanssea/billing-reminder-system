@@ -32,15 +32,21 @@ func main() {
 	productService := services.NewProductService(db)
 	testimonialService := services.NewTestimonialService(db)
 	faqService := services.NewFAQService(db)
-	authService := services.NewAuthService(db)
+	authService := services.NewAuthService(db, clientService)
+	invoiceService := services.NewInvoiceService(db, clientService)
+	paymentService := services.NewPaymentService(db, clientService)
+	purchaseService := services.NewPurchaseService(db, clientService, productService)
 
 	// Membuat handler
-	clientHandler := handlers.NewClientHandler(clientService)
+	clientHandler := handlers.NewClientHandler(clientService, authService)
 	adminHandler := handlers.NewAdminHandler(adminService)
 	productHandler := handlers.NewProductHandler(productService)
 	testimonialHandler := handlers.NewTestimonialHandler(testimonialService)
 	faqHandler := handlers.NewFAQHandler(faqService)
 	authHandler := handlers.NewAuthHandler(authService)
+	invoiceHandler := handlers.NewInvoiceHandler(invoiceService, authService)
+	paymentHandler := handlers.NewPaymentHandler(paymentService, authService)
+	purchaseHandler := handlers.NewPurchaseHandler(purchaseService, authService)
 
 	// Setup router
 	router := chi.NewRouter()
@@ -69,12 +75,17 @@ func main() {
 	}))
 
 	// Routes
+	routes.ClientProfileRoutes(router, clientHandler)
 	routes.ClientRoutes(router, clientHandler)
 	routes.AdminRoutes(router, adminHandler)
 	routes.ProductRoutes(router, productHandler)
 	routes.TestimonialRoutes(router, testimonialHandler)
 	routes.FAQRoutes(router, faqHandler)
 	routes.AuthRoutes(router, authHandler)
+	routes.ClientInvoiceRoutes(router, invoiceHandler)
+	routes.ClientPaymentRoutes(router, paymentHandler)
+	routes.ClientPurchaseRoutes(router, purchaseHandler)
+	routes.AdminPurchaseRoutes(router, purchaseHandler)
 
 	// Menjalankan server
 	server := &http.Server{

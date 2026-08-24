@@ -1,4 +1,5 @@
 const API_URL = "http://localhost:8080/api/products";
+const CLIENT_API_URL = "http://localhost:8080/api/client";
 
 export async function getProducts() {
   const response = await fetch(API_URL);
@@ -65,4 +66,25 @@ export async function deleteProduct(id) {
   }
 
   return true;
+}
+
+export async function purchaseProduct(productId, billingCycle, token) {
+  const response = await fetch(`${CLIENT_API_URL}/purchase`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      product_id: productId,
+      billing_cycle: billingCycle,
+    }),
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Gagal membuat permintaan pembelian");
+  }
+
+  return response.json();
 }

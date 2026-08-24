@@ -1,6 +1,10 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import ScrollToTop from "./components/ScrollToTop";
 import ProtectedRoute from "./components/ProtectedRoute";
+import MainLayout from "./components/layout/MainLayout";
+import ClientInvoices from "./pages/client/MyInvoices";
+import ClientPayments from "./pages/client/Payments";
+import ClientProfile from "./pages/client/Profile";
 import { AuthProvider } from "./context/AuthContext";
 import LandingPage from "./pages/auth/LandingPage";
 import Login from "./pages/auth/Login";
@@ -8,6 +12,8 @@ import Register from "./pages/auth/Register";
 import LupaPassword from "./pages/auth/LupaPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 import ClientDashboard from "./pages/client/Dashboard";
+import ClientProducts from "./pages/client/Products";
+import InvoiceDetail from "./pages/client/InvoiceDetail";
 import AdminDashboard from "./pages/admin/Dashboard";
 import SuperAdminDashboard from "./pages/superadmin/Dashboard";
 import TentangKami from "./pages/static/TentangKami";
@@ -35,13 +41,20 @@ function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/" element={<LandingPage />} />
         <Route
-          path="/client/dashboard"
+          path="/client"
           element={
             <ProtectedRoute roles={["CLIENT"]}>
-              <ClientDashboard />
+              <MainLayout />
             </ProtectedRoute>
           }
-        />
+        >
+          <Route path="dashboard" element={<ClientDashboard />} />
+          <Route path="invoices" element={<ClientInvoices />} />
+          <Route path="invoices/:id" element={<InvoiceDetail />} />
+          <Route path="payments" element={<ClientPayments />} />
+          <Route path="products" element={<ClientProducts />} />
+          <Route path="profile" element={<ClientProfile />} />
+        </Route>
         <Route
           path="/admin/dashboard"
           element={
