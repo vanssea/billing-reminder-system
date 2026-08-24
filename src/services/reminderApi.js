@@ -1,7 +1,14 @@
 const API_URL = "http://localhost:8080/api/reminders";
 
-export async function getReminders() {
-  const response = await fetch(API_URL);
+function authHeaders(token, extra = {}) {
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
+  };
+}
+
+export async function getReminders(token) {
+  const response = await fetch(API_URL, { headers: authHeaders(token) });
 
   if (!response.ok) {
     throw new Error("Gagal mengambil data reminder");
@@ -10,9 +17,10 @@ export async function getReminders() {
   return response.json();
 }
 
-export async function retryReminder(id) {
+export async function retryReminder(id, token) {
   const response = await fetch(`${API_URL}/${id}/retry`, {
     method: "POST",
+    headers: authHeaders(token),
   });
 
   if (!response.ok) {

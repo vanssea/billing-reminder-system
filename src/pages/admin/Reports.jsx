@@ -19,6 +19,7 @@ import {
 import { getInvoices } from "../../services/invoiceApi";
 import { getPayments } from "../../services/paymentApi";
 import { getClients } from "../../services/clientApi";
+import { useAuth } from "../../context/AuthContext";
 
 /* =========================================================
    HELPERS
@@ -123,6 +124,7 @@ const paymentStatusConfig = {
 ========================================================= */
 
 export default function AdminReports() {
+  const { accessToken } = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [payments, setPayments] = useState([]);
   const [clients, setClients] = useState([]);
@@ -140,9 +142,9 @@ export default function AdminReports() {
         setLoading(true);
         setError("");
         const [invoiceData, paymentData, clientData] = await Promise.all([
-          getInvoices(),
-          getPayments(),
-          getClients(1, 1000),
+          getInvoices(accessToken),
+          getPayments(accessToken),
+          getClients(1, 1000, undefined, undefined, accessToken),
         ]);
         if (!ignore) {
           setInvoices(invoiceData || []);
@@ -158,7 +160,7 @@ export default function AdminReports() {
     };
     load();
     return () => { ignore = true; };
-  }, []);
+  }, [accessToken]);
 
   const showSuccess = (msg) => {
     setSuccessMessage(msg);

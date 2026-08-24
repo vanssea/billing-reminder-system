@@ -1,13 +1,18 @@
 package routes
 
 import (
-	"github.com/go-chi/chi/v5"
-
 	"billing-reminder-system/handlers"
+	"billing-reminder-system/middleware"
+	"billing-reminder-system/models"
+	"billing-reminder-system/services"
+
+	"github.com/go-chi/chi/v5"
 )
 
-func InvoiceRoutes(router *chi.Mux, handler *handlers.InvoiceHandler) {
+func InvoiceRoutes(router *chi.Mux, handler *handlers.InvoiceHandler, authService *services.AuthService) {
 	router.Route("/api/invoices", func(r chi.Router) {
+		r.Use(middleware.RequireAuth(authService), middleware.RequireRole(models.RoleAdmin, models.RoleSuperadmin))
+
 		r.Get("/", handler.GetInvoices)
 		r.Post("/", handler.CreateInvoice)
 

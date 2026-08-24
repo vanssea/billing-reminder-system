@@ -21,6 +21,7 @@ import { getInvoices } from "../../services/invoiceApi";
 import { getPayments } from "../../services/paymentApi";
 import { getReminders } from "../../services/reminderApi";
 import { getClients } from "../../services/clientApi";
+import { useAuth } from "../../context/AuthContext";
 import {
   formatRupiahExport,
   formatDateExport,
@@ -237,6 +238,7 @@ const reminderStatusConfig = {
 ========================================================= */
 
 export default function SuperAdminReports() {
+  const { accessToken } = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [payments, setPayments] = useState([]);
   const [reminders, setReminders] = useState([]);
@@ -258,10 +260,10 @@ export default function SuperAdminReports() {
 
         const [invoiceData, paymentData, reminderData, clientData] =
           await Promise.all([
-            getInvoices(),
-            getPayments(),
-            getReminders(),
-            getClients(1, 1000),
+            getInvoices(accessToken),
+            getPayments(accessToken),
+            getReminders(accessToken),
+            getClients(1, 1000, undefined, undefined, accessToken),
           ]);
 
         if (!ignore) {
@@ -286,7 +288,7 @@ export default function SuperAdminReports() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [accessToken]);
 
   const showSuccess = (msg) => {
     setSuccessMessage(msg);

@@ -1,7 +1,14 @@
 const API_URL = "http://localhost:8080/api/admins";
 
-export async function getAdmins() {
-  const response = await fetch(API_URL);
+function authHeaders(token, extra = {}) {
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
+  };
+}
+
+export async function getAdmins(token) {
+  const response = await fetch(API_URL, { headers: authHeaders(token) });
 
   if (!response.ok) {
     throw new Error("Gagal mengambil data admin");
@@ -10,8 +17,8 @@ export async function getAdmins() {
   return response.json();
 }
 
-export async function getAdminById(id) {
-  const response = await fetch(`${API_URL}/${id}`);
+export async function getAdminById(id, token) {
+  const response = await fetch(`${API_URL}/${id}`, { headers: authHeaders(token) });
 
   if (!response.ok) {
     throw new Error("Admin tidak ditemukan");
@@ -20,12 +27,10 @@ export async function getAdminById(id) {
   return response.json();
 }
 
-export async function createAdmin(data) {
+export async function createAdmin(data, token) {
   const response = await fetch(API_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
     body: JSON.stringify(data),
   });
 
@@ -37,12 +42,10 @@ export async function createAdmin(data) {
   return response.json();
 }
 
-export async function updateAdmin(id, data) {
+export async function updateAdmin(id, data, token) {
   const response = await fetch(`${API_URL}/${id}`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
     body: JSON.stringify(data),
   });
 
@@ -54,9 +57,10 @@ export async function updateAdmin(id, data) {
   return response.json();
 }
 
-export async function deleteAdmin(id) {
+export async function deleteAdmin(id, token) {
   const response = await fetch(`${API_URL}/${id}`, {
     method: "DELETE",
+    headers: authHeaders(token),
   });
 
   if (!response.ok) {

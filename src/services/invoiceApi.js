@@ -1,11 +1,16 @@
 const API_URL = "http://localhost:8080/api/invoices";
 const CLIENT_API_URL = "http://localhost:8080/api/client";
 
+function authHeaders(token, extra = {}) {
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
+  };
+}
+
 export async function getClientInvoices(token) {
   const response = await fetch(`${CLIENT_API_URL}/invoices`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    headers: authHeaders(token),
   });
 
   if (!response.ok) {
@@ -15,8 +20,8 @@ export async function getClientInvoices(token) {
   return response.json();
 }
 
-export async function getInvoices() {
-  const response = await fetch(API_URL);
+export async function getInvoices(token) {
+  const response = await fetch(API_URL, { headers: authHeaders(token) });
 
   if (!response.ok) {
     throw new Error("Gagal mengambil data invoice");
@@ -25,8 +30,8 @@ export async function getInvoices() {
   return response.json();
 }
 
-export async function getInvoiceById(id) {
-  const response = await fetch(`${API_URL}/${id}`);
+export async function getInvoiceById(id, token) {
+  const response = await fetch(`${API_URL}/${id}`, { headers: authHeaders(token) });
 
   if (!response.ok) {
     throw new Error("Invoice tidak ditemukan");
@@ -35,12 +40,10 @@ export async function getInvoiceById(id) {
   return response.json();
 }
 
-export async function createInvoice(data) {
+export async function createInvoice(data, token) {
   const response = await fetch(API_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
     body: JSON.stringify(data),
   });
 
@@ -54,9 +57,7 @@ export async function createInvoice(data) {
 
 export async function getClientInvoiceById(id, token) {
   const response = await fetch(`${CLIENT_API_URL}/invoices/${id}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    headers: authHeaders(token),
   });
 
   if (!response.ok) {
@@ -66,12 +67,10 @@ export async function getClientInvoiceById(id, token) {
   return response.json();
 }
 
-export async function updateInvoice(id, data) {
+export async function updateInvoice(id, data, token) {
   const response = await fetch(`${API_URL}/${id}`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
     body: JSON.stringify(data),
   });
 
@@ -83,9 +82,10 @@ export async function updateInvoice(id, data) {
   return response.json();
 }
 
-export async function sendInvoice(id) {
+export async function sendInvoice(id, token) {
   const response = await fetch(`${API_URL}/${id}/send`, {
     method: "POST",
+    headers: authHeaders(token),
   });
 
   if (!response.ok) {
@@ -96,9 +96,10 @@ export async function sendInvoice(id) {
   return response.json();
 }
 
-export async function deleteInvoice(id) {
+export async function deleteInvoice(id, token) {
   const response = await fetch(`${API_URL}/${id}`, {
     method: "DELETE",
+    headers: authHeaders(token),
   });
 
   if (!response.ok) {

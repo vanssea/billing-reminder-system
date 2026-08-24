@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import {
@@ -9,6 +9,7 @@ import {
 import { getInvoices, getInvoiceById, createInvoice, updateInvoice, deleteInvoice } from "../../services/invoiceApi";
 import { getClients } from "../../services/clientApi";
 import { getProducts } from "../../services/productApi";
+import { useAuth } from "../../context/AuthContext";
 import InvoiceTemplate from "../../components/invoice/InvoiceTemplate";
 
 const formatPrice = (p) => new Intl.NumberFormat("id-ID").format(p); 
@@ -33,6 +34,7 @@ function StatusBadge({ status }) {
 } 
  
 export default function InvoiceManagement() {
+  const { accessToken } = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [clients, setClients] = useState([]);
   const [products, setProducts] = useState([]);
@@ -55,12 +57,12 @@ export default function InvoiceManagement() {
     (async () => { 
       try {
         setLoading(true); setError("");
-        const [invData, cliData, prdData] = await Promise.all([getInvoices(), getClients(), getProducts()]);
+        const [invData, cliData, prdData] = await Promise.all([getInvoices(accessToken), getClients(1, 1000, undefined, undefined, accessToken), getProducts()]);
         if (!ignore) { setClients((cliData && cliData.data) || cliData || []); setInvoices(invData); setProducts(prdData); }
       } catch (err) { if (!ignore) setError(err.message || "Gagal memuat data"); } finally { if (!ignore) setLoading(false); }
-    })(); 
-    return () => { ignore = true; }; 
-  }, []); 
+    })();
+    return () => { ignore = true; };
+  }, [accessToken]);
  
   useEffect(() => {
     document.body.style.overflow = detailTarget || modalOpen || deleteTarget ? "hidden" : "";
@@ -191,13 +193,13 @@ const filteredInvoices = useMemo(() => {
         items: validItems.map((it) => ({ product_id: it.product_id, quantity: Number(it.quantity) || 1 })),
       };
       if (editingId) {
-        await updateInvoice(editingId, payload);
+        await updateInvoice(editingId, payload, accessToken);
       } else {
-        await createInvoice(payload);
+        await createInvoice(payload, accessToken);
       }
       setSuccess(editingId ? "Invoice berhasil diperbarui." : "Invoice berhasil ditambahkan.");
       setModalOpen(false);
-      const refreshed = await getInvoices();
+      const refreshed = await getInvoices(accessToken);
       setInvoices(refreshed);
     } catch (err) {
       setError(err.message || "Gagal menyimpan invoice");
@@ -210,7 +212,7 @@ const filteredInvoices = useMemo(() => {
     if (!deleteTarget) return;
     setSaving(true);
     try {
-      await deleteInvoice(deleteTarget.id);
+      await deleteInvoice(deleteTarget.id, accessToken);
       setSuccess("Invoice berhasil dihapus.");
       setDeleteTarget(null);
       setInvoices((prev) => prev.filter((i) => i.id !== deleteTarget.id));

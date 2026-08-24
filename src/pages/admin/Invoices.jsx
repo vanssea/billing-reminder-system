@@ -44,7 +44,7 @@ export default function AdminInvoices() {
   const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const isSuperadmin = user?.role === "SUPERADMIN";
   const [sortOrder, setSortOrder] = useState("desc");
   const [detailTarget, setDetailTarget] = useState(null);
@@ -68,14 +68,14 @@ export default function AdminInvoices() {
         setLoading(true);
         setError("");
         const [invData, cliData, prdData] = await Promise.all([
-          getInvoices(), getClients(1, 1000), getProducts(),
+          getInvoices(accessToken), getClients(1, 1000, undefined, undefined, accessToken), getProducts(),
         ]);
         if (!ignore) { setClients((cliData && cliData.data) || cliData || []); setInvoices(invData); setProducts(prdData); }
       } catch (err) { if (!ignore) setError(err.message || "Gagal memuat data"); }
       finally { if (!ignore) setLoading(false); }
     })();
     return () => { ignore = true; };
-  }, []);
+  }, [accessToken]);
 
   useEffect(() => {
     document.body.style.overflow = detailTarget || modalOpen || deleteTarget || sendTarget || cancelTarget ? "hidden" : "";
@@ -204,13 +204,13 @@ export default function AdminInvoices() {
         items: validItems.map((it) => ({ product_id: it.product_id, quantity: Number(it.quantity) || 1 })),
       };
       if (editingId) {
-        await updateInvoice(editingId, payload);
+        await updateInvoice(editingId, payload, accessToken);
       } else {
-        await createInvoice(payload);
+        await createInvoice(payload, accessToken);
       }
       setSuccess(editingId ? "Invoice berhasil diperbarui." : "Invoice berhasil ditambahkan.");
       setModalOpen(false);
-      const refreshed = await getInvoices();
+      const refreshed = await getInvoices(accessToken);
       setInvoices(refreshed);
     } catch (err) {
       setError(err.message || "Gagal menyimpan invoice");
@@ -223,7 +223,7 @@ export default function AdminInvoices() {
     if (!deleteTarget) return;
     setSaving(true);
     try {
-      await deleteInvoice(deleteTarget.id);
+      await deleteInvoice(deleteTarget.id, accessToken);
       setSuccess("Invoice berhasil dihapus.");
       setDeleteTarget(null);
       setInvoices((prev) => prev.filter((i) => i.id !== deleteTarget.id));
@@ -238,15 +238,15 @@ export default function AdminInvoices() {
     if (!sendTarget) return;
     setSaving(true);
     try {
-      await sendInvoice(sendTarget.id);
+      await sendInvoice(sendTarget.id, accessToken);
       setSuccess(`Invoice ${sendTarget.invoice_number} berhasil dikirim ke WhatsApp client.`);
       setSendTarget(null);
-      const refreshed = await getInvoices();
+      const refreshed = await getInvoices(accessToken);
       setInvoices(refreshed);
     } catch (err) {
       setError(err.message || "Gagal mengirim invoice");
       setSendTarget(null);
-      const refreshed = await getInvoices();
+      const refreshed = await getInvoices(accessToken);
       setInvoices(refreshed);
     } finally {
       setSaving(false);
@@ -266,10 +266,10 @@ export default function AdminInvoices() {
         notes: cancelTarget.notes || null,
         created_by: cancelTarget.created_by || null,
         items: (cancelTarget.items || []).map((it) => ({ product_id: it.product_id, quantity: it.quantity })),
-      });
+      }, accessToken);
       setSuccess(`Invoice ${cancelTarget.invoice_number} berhasil dibatalkan.`);
       setCancelTarget(null);
-      const refreshed = await getInvoices();
+      const refreshed = await getInvoices(accessToken);
       setInvoices(refreshed);
     } catch (err) {
       setError(err.message || "Gagal membatalkan invoice");

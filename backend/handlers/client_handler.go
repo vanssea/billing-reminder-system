@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
-	"strings"
 	"strconv"
 
+	"billing-reminder-system/middleware"
+	"billing-reminder-system/models"
 	"billing-reminder-system/services"
 
 	"github.com/go-chi/chi/v5"
@@ -130,6 +132,15 @@ func (h *ClientHandler) DeleteClient(w http.ResponseWriter, r *http.Request) {
 func (h *ClientHandler) GetClientByProfileID(w http.ResponseWriter, r *http.Request) {
 	profileID := chi.URLParam(r, "profile_id")
 
+	// CLIENT hanya boleh mengakses data client miliknya sendiri;
+	// ADMIN/SUPERADMIN boleh melihat semua.
+	if profile := middleware.ProfileFromContext(r); profile != nil && profile.Role == models.RoleClient {
+		if profileID != profile.ID {
+			http.Error(w, "Client tidak ditemukan", http.StatusNotFound)
+			return
+		}
+	}
+
 	client, err := h.Service.GetClientByProfileID(profileID)
 	if err != nil {
 		http.Error(w, "Client tidak ditemukan", http.StatusNotFound)
@@ -141,21 +152,15 @@ func (h *ClientHandler) GetClientByProfileID(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *ClientHandler) CreateOrUpdateClientProfile(w http.ResponseWriter, r *http.Request) {
-	authHeader := r.Header.Get("Authorization")
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		http.Error(w, "Token tidak ditemukan", http.StatusUnauthorized)
-		return
-	}
-	token := strings.TrimPrefix(authHeader, "Bearer ")
-
-	profile, err := h.AuthService.GetProfileByToken(token)
-	if err != nil {
-		http.Error(w, "Token tidak valid", http.StatusUnauthorized)
+	// Identitas dari middleware: profile_id selalu milik token, bukan body.
+	profile := middleware.ProfileFromContext(r)
+	if profile == nil {
+		http.Error(w, "Belum terautentikasi", http.StatusUnauthorized)
 		return
 	}
 
 	var req services.UpdateClientRequest
-	err = json.NewDecoder(r.Body).Decode(&req)
+	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http.Error(w, "Format JSON tidak valid", http.StatusBadRequest)
 		return
@@ -163,7 +168,8 @@ func (h *ClientHandler) CreateOrUpdateClientProfile(w http.ResponseWriter, r *ht
 
 	client, err := h.Service.CreateOrUpdateClientByProfileID(profile.ID, req)
 	if err != nil {
-		http.Error(w, "Gagal menyimpan profil: "+err.Error(), http.StatusInternalServerError)
+		log.Printf("CreateOrUpdateClientProfile %s: %v", profile.ID, err)
+		http.Error(w, "Gagal menyimpan profil", http.StatusInternalServerError)
 		return
 	}
 

@@ -3,7 +3,6 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import ScrollToTop from "./components/ScrollToTop";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MainLayout from "./components/layout/MainLayout";
-import { DevBypass, DevLogout } from "./components/DevBypass";
 import ClientInvoices from "./pages/client/MyInvoices";
 import ClientPayments from "./pages/client/Payments";
 import ClientProfile from "./pages/client/Profile";
@@ -68,19 +67,6 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/lupa-password" element={<LupaPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
-
-        {/* ==================== DEV BYPASS (hanya vite dev) ==================== */}
-        {import.meta.env.DEV && (
-          <>
-            <Route path="/dev/client" element={<DevBypass role="CLIENT" />} />
-            <Route path="/dev/admin" element={<DevBypass role="ADMIN" />} />
-            <Route
-              path="/dev/superadmin"
-              element={<DevBypass role="SUPERADMIN" />}
-            />
-            <Route path="/dev/logout" element={<DevLogout />} />
-          </>
-        )}
 
         {/* ==================== LANDING ==================== */}
         <Route path="/" element={<LandingPage />} />

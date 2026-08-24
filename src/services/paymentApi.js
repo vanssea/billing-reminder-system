@@ -1,11 +1,16 @@
 const API_URL = "http://localhost:8080/api/payments";
 const CLIENT_API_URL = "http://localhost:8080/api/client";
 
+function authHeaders(token, extra = {}) {
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
+  };
+}
+
 export async function getClientPayments(token) {
   const response = await fetch(`${CLIENT_API_URL}/payments`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    headers: authHeaders(token),
   });
 
   if (!response.ok) {
@@ -15,8 +20,8 @@ export async function getClientPayments(token) {
   return response.json();
 }
 
-export async function getPayments() {
-  const response = await fetch(API_URL);
+export async function getPayments(token) {
+  const response = await fetch(API_URL, { headers: authHeaders(token) });
 
   if (!response.ok) {
     throw new Error("Gagal mengambil data pembayaran");
@@ -25,8 +30,8 @@ export async function getPayments() {
   return response.json();
 }
 
-export async function getPaymentById(id) {
-  const response = await fetch(`${API_URL}/${id}`);
+export async function getPaymentById(id, token) {
+  const response = await fetch(`${API_URL}/${id}`, { headers: authHeaders(token) });
 
   if (!response.ok) {
     throw new Error("Pembayaran tidak ditemukan");
@@ -35,12 +40,10 @@ export async function getPaymentById(id) {
   return response.json();
 }
 
-export async function approvePayment(id, verifiedBy = null) {
+export async function approvePayment(id, token, verifiedBy = null) {
   const response = await fetch(`${API_URL}/${id}/approve`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
     body: JSON.stringify({ verified_by: verifiedBy }),
   });
 
@@ -52,13 +55,11 @@ export async function approvePayment(id, verifiedBy = null) {
   return response.json();
 }
 
-export async function rejectPayment(id, { verifiedBy = null, notes = null } = {}) {
+export async function rejectPayment(id, token, { notes = null } = {}) {
   const response = await fetch(`${API_URL}/${id}/reject`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ verified_by: verifiedBy, notes: notes || null }),
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
+    body: JSON.stringify({ notes: notes || null }),
   });
 
   if (!response.ok) {
@@ -72,10 +73,7 @@ export async function rejectPayment(id, { verifiedBy = null, notes = null } = {}
 export async function createPayment(data, token) {
   const response = await fetch(`${CLIENT_API_URL}/payments`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
     body: JSON.stringify(data),
   });
 

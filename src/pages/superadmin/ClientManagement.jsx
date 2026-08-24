@@ -27,6 +27,7 @@ import {
   updateClient,
   deleteClient,
 } from "../../services/clientApi";
+import { useAuth } from "../../context/AuthContext";
 
 const emptyForm = {
   company_name: "",
@@ -71,6 +72,7 @@ function StatusBadge({ status }) {
 
 
 export default function ClientManagement() {
+  const { accessToken } = useAuth();
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -101,7 +103,7 @@ export default function ClientManagement() {
       setLoading(true);
       setError("");
 
-      const res = await getClients(1, 1000);
+      const res = await getClients(1, 1000, undefined, undefined, accessToken);
       const data = (res && res.data) || res || [];
 
       setClients(
@@ -211,10 +213,10 @@ export default function ClientManagement() {
       };
 
       if (editingId) {
-        await updateClient(editingId, payload);
+        await updateClient(editingId, payload, accessToken);
         setSuccess("Data client berhasil diperbarui.");
       } else {
-        await createClient(payload);
+        await createClient(payload, accessToken);
         setSuccess("Client baru berhasil ditambahkan.");
       }
 
@@ -236,7 +238,7 @@ export default function ClientManagement() {
     setError("");
     setSuccess("");
 
-    await deleteClient(deleteTarget.id);
+    await deleteClient(deleteTarget.id, accessToken);
 
     setClients((prev) =>
       prev.filter((item) => item.id !== deleteTarget.id)

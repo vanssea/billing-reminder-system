@@ -31,6 +31,35 @@ func (s *PaymentService) GetClientByProfileID(profileID string) (*models.Client,
 	return s.ClientService.GetClientByProfileID(profileID)
 }
 
+// InvoiceBelongsToClient memverifikasi bahwa invoice dimiliki oleh client
+// tertentu. Dipakai handler untuk ownership check CLIENT.
+func (s *PaymentService) InvoiceBelongsToClient(ctx context.Context, invoiceID, clientID string) (bool, error) {
+	var exists bool
+	err := s.DB.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM invoices i
+			JOIN clients c ON c.id = i.client_id
+			WHERE i.id = $1 AND c.id = $2
+		)
+	`, invoiceID, clientID).Scan(&exists)
+	return exists, err
+}
+
+// PaymentBelongsToClient memverifikasi bahwa payment terhubung ke invoice
+// milik client tertentu.
+func (s *PaymentService) PaymentBelongsToClient(ctx context.Context, paymentID, clientID string) (bool, error) {
+	var exists bool
+	err := s.DB.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM payments p
+			JOIN invoices i ON i.id = p.invoice_id
+			JOIN clients c ON c.id = i.client_id
+			WHERE p.id = $1 AND c.id = $2
+		)
+	`, paymentID, clientID).Scan(&exists)
+	return exists, err
+}
+
 func (s *PaymentService) GetPaymentsByClientID(clientID string) ([]models.Payment, error) {
 	// First get invoices for this client, then get payments for those invoices
 	query := `

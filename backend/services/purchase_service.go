@@ -170,6 +170,46 @@ func (s *PurchaseService) GetPurchaseRequestsByClientID(clientID string) ([]mode
 	return requests, rows.Err()
 }
 
+// GetAllPurchaseRequests mengembalikan seluruh permintaan pembelian
+// (untuk staff internal).
+func (s *PurchaseService) GetAllPurchaseRequests() ([]models.PurchaseRequestModel, error) {
+	query := `
+		SELECT
+			id, client_id, profile_id, product_id, product_name, billing_cycle, amount, status, admin_notes, created_at, updated_at
+		FROM purchase_requests
+		ORDER BY created_at DESC
+	`
+
+	rows, err := s.DB.Query(context.Background(), query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var requests []models.PurchaseRequestModel
+	for rows.Next() {
+		var req models.PurchaseRequestModel
+		err := rows.Scan(
+			&req.ID,
+			&req.ClientID,
+			&req.ProfileID,
+			&req.ProductID,
+			&req.ProductName,
+			&req.BillingCycle,
+			&req.Amount,
+			&req.Status,
+			&req.AdminNotes,
+			&req.CreatedAt,
+			&req.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		requests = append(requests, req)
+	}
+	return requests, rows.Err()
+}
+
 func (s *PurchaseService) GetPurchaseRequestByID(id string) (*models.PurchaseRequestModel, error) {
 	query := `
 		SELECT

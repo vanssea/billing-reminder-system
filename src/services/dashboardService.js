@@ -1,8 +1,10 @@
 const API_URL = "http://localhost:8080/api/admin/dashboard";
 const SUPER_ADMIN_URL = "http://localhost:8080/api/super-admin/dashboard";
 
-export const getDashboardSummary = async () => {
-  const response = await fetch(API_URL);
+export const getDashboardSummary = async (token) => {
+  const response = await fetch(API_URL, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
 
   if (!response.ok) {
     throw new Error("Gagal memuat data dashboard");
@@ -18,8 +20,10 @@ export const getDashboardSummary = async () => {
   };
 };
 
-export const getSuperAdminDashboard = async () => {
-  const response = await fetch(SUPER_ADMIN_URL);
+export const getSuperAdminDashboard = async (token) => {
+  const response = await fetch(SUPER_ADMIN_URL, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
 
   if (!response.ok) {
     const message = await response.text();

@@ -25,6 +25,7 @@ import {
   updateClient,
   updateClientStatus,
 } from "../../services/clientApi";
+import { useAuth } from "../../context/AuthContext";
 
 const emptyForm = {
   company_name: "",
@@ -68,13 +69,14 @@ function FieldError({ errors, field }) {
   ) : null;
 }
 
-const fetchClients = async () => {
-  const res = await getClients(1, 1000);
+const fetchClients = async (token) => {
+  const res = await getClients(1, 1000, undefined, undefined, token);
   const data = (res && res.data) || res || [];
   return data.map((client) => ({ ...client, status: toUiStatus(client.status) }));
 };
 
 export default function AdminClients() {
+  const { accessToken } = useAuth();
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -107,7 +109,7 @@ export default function AdminClients() {
     (async () => {
       try {
         setError("");
-        const data = await fetchClients();
+      const data = await fetchClients(accessToken);
         if (!ignore) setClients(data);
       } catch (err) {
         console.error(err);
@@ -222,10 +224,10 @@ export default function AdminClients() {
       };
 
       if (editingId) {
-        await updateClient(editingId, payload);
+        await updateClient(editingId, payload, accessToken);
         setSuccess("Data client berhasil diperbarui.");
       } else {
-        await createClient(payload);
+        await createClient(payload, accessToken);
         setSuccess("Client baru berhasil ditambahkan.");
       }
 
@@ -248,7 +250,7 @@ export default function AdminClients() {
       setSuccess("");
 
       const newDbStatus = statusTarget.status === "Active" ? "INACTIVE" : "ACTIVE";
-      await updateClientStatus(statusTarget.id, newDbStatus);
+      await updateClientStatus(statusTarget.id, newDbStatus, accessToken);
 
       setSuccess(`Status client berhasil diubah menjadi ${toUiStatus(newDbStatus)}.`);
       setStatusTarget(null);

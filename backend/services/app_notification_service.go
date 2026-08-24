@@ -95,11 +95,19 @@ func (s *AppNotificationService) CountUnread(ctx context.Context, roles []string
 	return count, err
 }
 
-func (s *AppNotificationService) MarkRead(ctx context.Context, id int64) error {
-	_, err := s.DB.Exec(ctx, `
-		UPDATE app_notifications SET is_read = TRUE WHERE id = $1
-	`, id)
-	return err
+// MarkRead menandai satu notifikasi dibaca, hanya jika notifikasi tersebut
+// berada dalam scope role/profile peminta (ownership check).
+func (s *AppNotificationService) MarkRead(ctx context.Context, id int64, roles []string, profileID string) (int64, error) {
+	tag, err := s.DB.Exec(ctx, `
+		UPDATE app_notifications SET is_read = TRUE
+		WHERE id = $1
+		  AND target_role = ANY($2::text[])
+		  AND ($3::text = '' OR target_profile_id IN ('', $3))
+	`, id, roles, profileID)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
 }
 
 func (s *AppNotificationService) MarkAllRead(ctx context.Context, roles []string, profileID string) (int64, error) {

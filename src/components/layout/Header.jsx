@@ -54,24 +54,15 @@ const Header = ({ role = "admin" }) => {
   const navigate = useNavigate();
   const { user, accessToken, signOut } = useAuth();
 
-  // ADMIN dan SUPERADMIN membaca feed internal yang sama (role=ADMIN);
-  // CLIENT memiliki feed terpisah (role=CLIENT, butuh token).
-  const notifRole =
-    user?.role === "CLIENT"
-      ? "CLIENT"
-      : user?.role === "SUPERADMIN"
-        ? "ADMIN"
-        : "ADMIN";
-
   const loadNotifications = useCallback(async () => {
     try {
-      const result = await getNotifications(notifRole, 15, accessToken);
+      const result = await getNotifications(15, accessToken);
       setNotifications(result.data || []);
       setUnreadCount(result.unread_count || 0);
     } catch {
       setNotifications([]);
     }
-  }, [notifRole, accessToken]);
+  }, [accessToken]);
 
   useEffect(() => {
     loadNotifications();
@@ -83,7 +74,7 @@ const Header = ({ role = "admin" }) => {
 
   const handleMarkAllRead = async () => {
     try {
-      await markAllNotificationsRead(notifRole, accessToken);
+      await markAllNotificationsRead(accessToken);
       await loadNotifications();
     } catch {}
   };

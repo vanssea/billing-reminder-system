@@ -12,6 +12,7 @@ import {
 import Sidebar from "../../components/layout/Sidebar.jsx";
 import Header from "../../components/layout/Header.jsx";
 import { getDashboardSummary } from "../../services/dashboardService.js";
+import { useAuth } from "../../context/AuthContext";
 
 const formatPrice = (price) => new Intl.NumberFormat("id-ID").format(price || 0);
 
@@ -148,6 +149,7 @@ function DonutChart({ data, hoveredIndex, onHover, onLeave }) {
 }
 
 export default function AdminDashboard() {
+  const { accessToken } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -158,7 +160,7 @@ export default function AdminDashboard() {
     (async () => {
       try {
         setError("");
-        const summary = await getDashboardSummary();
+        const summary = await getDashboardSummary(accessToken);
         if (!ignore) setData(summary);
       } catch (err) {
         console.error(err);
@@ -170,7 +172,7 @@ export default function AdminDashboard() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [accessToken]);
 
   const stats = data?.stats || {};
 

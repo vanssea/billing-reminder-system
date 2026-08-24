@@ -1,7 +1,14 @@
 const API_URL = "http://localhost:8080/api/admin/clients";
 const DELETE_API_URL = "http://localhost:8080/api/clients";
 
-export async function getClients(page, limit, search, status) {
+function authHeaders(token, extra = {}) {
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
+  };
+}
+
+export async function getClients(page, limit, search, status, token) {
   const params = new URLSearchParams();
   if (page !== undefined) params.set("page", page);
   if (limit !== undefined) params.set("limit", limit);
@@ -9,25 +16,25 @@ export async function getClients(page, limit, search, status) {
   if (status) params.set("status", status);
 
   const query = params.toString();
-  const response = await fetch(`${API_URL}${query ? `?${query}` : ""}`);
+  const response = await fetch(`${API_URL}${query ? `?${query}` : ""}`, {
+    headers: authHeaders(token),
+  });
   if (!response.ok) throw new Error("Gagal mengambil data client");
   return response.json();
 }
 
-export async function getClientById(id) {
-  const response = await fetch(`${API_URL}/${id}`);
+export async function getClientById(id, token) {
+  const response = await fetch(`${API_URL}/${id}`, { headers: authHeaders(token) });
   if (!response.ok) {
     throw new Error("Client tidak ditemukan");
   }
   return response.json();
 }
 
-export async function createClient(data) {
+export async function createClient(data, token) {
   const response = await fetch(API_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
     body: JSON.stringify(data),
   });
   if (!response.ok) {
@@ -37,12 +44,10 @@ export async function createClient(data) {
   return response.json();
 }
 
-export async function updateClient(id, data) {
+export async function updateClient(id, data, token) {
   const response = await fetch(`${API_URL}/${id}`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
     body: JSON.stringify(data),
   });
   if (!response.ok) {
@@ -52,9 +57,10 @@ export async function updateClient(id, data) {
   return response.json();
 }
 
-export async function deleteClient(id) {
+export async function deleteClient(id, token) {
   const response = await fetch(`${DELETE_API_URL}/${id}`, {
     method: "DELETE",
+    headers: authHeaders(token),
   });
   if (!response.ok) {
     const message = await response.text();
@@ -113,10 +119,10 @@ export async function createPurchaseRequest(data, token) {
   return response.json();
 }
 
-export async function updateClientStatus(id, status) {
+export async function updateClientStatus(id, status, token) {
   const response = await fetch(`${API_URL}/${id}/status`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
     body: JSON.stringify({ status }),
   });
   

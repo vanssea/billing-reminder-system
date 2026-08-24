@@ -2,89 +2,52 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
+	"log"
 	"net/http"
 	"strconv"
-	"strings"
 
+	"billing-reminder-system/middleware"
 	"billing-reminder-system/models"
 	"billing-reminder-system/services"
 
 	"github.com/go-chi/chi/v5"
 )
 
-var errMissingToken = errors.New("bearer token tidak ditemukan")
-
 type AppNotificationHandler struct {
-	Service *services.AppNotificationService
-	Auth    *services.AuthService
+	Service     *services.AppNotificationService
+	AuthService *services.AuthService
 }
 
 func NewAppNotificationHandler(service *services.AppNotificationService, authService *services.AuthService) *AppNotificationHandler {
-	return &AppNotificationHandler{Service: service, Auth: authService}
+	return &AppNotificationHandler{Service: service, AuthService: authService}
 }
 
-// roleFilter mengubah query param role menjadi daftar target_role yang
-// boleh dilihat. ADMIN dan SUPERADMIN melihat feed internal yang sama;
-// CLIENT memiliki feed terpisah (notifikasi khusus akunnya).
-func roleFilter(r *http.Request) []string {
-	switch strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("role"))) {
-	case "SUPERADMIN":
-		return []string{models.NotifRoleSuperadmin, models.NotifRoleAdmin, models.NotifRoleAll}
-	case "ADMIN":
-		return []string{models.NotifRoleSuperadmin, models.NotifRoleAdmin, models.NotifRoleAll}
-	case "CLIENT":
-		return []string{models.NotifRoleClient}
+// notificationScope menentukan scope notifikasi berdasarkan identitas
+// terautentikasi (middleware), BUKAN dari parameter request.
+//
+//	ADMIN/SUPERADMIN -> feed internal yang sama (ADMIN + SUPERADMIN + ALL)
+//	CLIENT           -> hanya notifikasi yang ditujukan ke profile-nya
+func notificationScope(r *http.Request) (roles []string, profileID string) {
+	profile := middleware.ProfileFromContext(r)
+	if profile == nil {
+		return []string{models.NotifRoleAll}, ""
+	}
+
+	switch profile.Role {
+	case models.RoleSuperadmin, models.RoleAdmin:
+		return []string{models.NotifRoleSuperadmin, models.NotifRoleAdmin, models.NotifRoleAll}, ""
+	case models.RoleClient:
+		return []string{models.NotifRoleClient}, profile.ID
 	default:
-		return []string{models.NotifRoleAll}
+		return []string{models.NotifRoleAll}, ""
 	}
 }
 
-// clientProfileID mengambil ID profile dari Bearer token pada request.
-// Wajib untuk role CLIENT agar notifikasi hanya menampilkan miliknya sendiri.
-func (h *AppNotificationHandler) clientProfileID(r *http.Request) (string, error) {
-	authHeader := r.Header.Get("Authorization")
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		return "", errMissingToken
-	}
-
-	token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
-	if token == "" {
-		return "", errMissingToken
-	}
-
-	user, err := h.Auth.GetProfileByToken(token)
-	if err != nil {
-		return "", err
-	}
-
-	return user.ID, nil
-}
-
-func containsRole(roles []string, role string) bool {
-	for _, r := range roles {
-		if r == role {
-			return true
-		}
-	}
-	return false
-}
-
-// ListNotifications GET /api/notifications?role=SUPERADMIN&limit=15
+// ListNotifications GET /api/notifications?limit=15
 // Mengembalikan daftar notifikasi sekaligus jumlah belum dibaca dalam
 // satu panggilan agar polling frontend hemat.
 func (h *AppNotificationHandler) ListNotifications(w http.ResponseWriter, r *http.Request) {
-	roles := roleFilter(r)
-
-	profileID := ""
-	if containsRole(roles, models.NotifRoleClient) {
-		var err error
-		profileID, err = h.clientProfileID(r)
-		if err != nil {
-			http.Error(w, "Token tidak valid", http.StatusUnauthorized)
-			return
-		}
-	}
+	roles, profileID := notificationScope(r)
 
 	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
 	if err != nil || limit <= 0 {
@@ -93,6 +56,7 @@ func (h *AppNotificationHandler) ListNotifications(w http.ResponseWriter, r *htt
 
 	data, err := h.Service.List(r.Context(), roles, limit, profileID)
 	if err != nil {
+		log.Printf("ListNotifications: %v", err)
 		http.Error(w, "Gagal memuat notifikasi", http.StatusInternalServerError)
 		return
 	}
@@ -102,6 +66,7 @@ func (h *AppNotificationHandler) ListNotifications(w http.ResponseWriter, r *htt
 
 	unread, err := h.Service.CountUnread(r.Context(), roles, profileID)
 	if err != nil {
+		log.Printf("CountUnread: %v", err)
 		http.Error(w, "Gagal menghitung notifikasi", http.StatusInternalServerError)
 		return
 	}
@@ -121,8 +86,16 @@ func (h *AppNotificationHandler) MarkRead(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.Service.MarkRead(r.Context(), id); err != nil {
+	roles, profileID := notificationScope(r)
+
+	updated, err := h.Service.MarkRead(r.Context(), id, roles, profileID)
+	if err != nil {
+		log.Printf("MarkRead %d: %v", id, err)
 		http.Error(w, "Gagal menandai notifikasi dibaca", http.StatusInternalServerError)
+		return
+	}
+	if updated == 0 {
+		http.Error(w, "Notifikasi tidak ditemukan", http.StatusNotFound)
 		return
 	}
 
@@ -130,22 +103,13 @@ func (h *AppNotificationHandler) MarkRead(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
-// MarkAllRead PUT /api/notifications/read-all?role=SUPERADMIN
+// MarkAllRead PUT /api/notifications/read-all
 func (h *AppNotificationHandler) MarkAllRead(w http.ResponseWriter, r *http.Request) {
-	roles := roleFilter(r)
-
-	profileID := ""
-	if containsRole(roles, models.NotifRoleClient) {
-		var err error
-		profileID, err = h.clientProfileID(r)
-		if err != nil {
-			http.Error(w, "Token tidak valid", http.StatusUnauthorized)
-			return
-		}
-	}
+	roles, profileID := notificationScope(r)
 
 	updated, err := h.Service.MarkAllRead(r.Context(), roles, profileID)
 	if err != nil {
+		log.Printf("MarkAllRead: %v", err)
 		http.Error(w, "Gagal menandai semua notifikasi dibaca", http.StatusInternalServerError)
 		return
 	}
