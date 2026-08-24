@@ -9,121 +9,117 @@ import (
 	"billing-reminder-system/services"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 )
 
 type PaymentHandler struct {
-	Service *services.PaymentService
+	Service     *services.PaymentService
+	AuthService *services.AuthService
 }
 
-func NewPaymentHandler(service *services.PaymentService) *PaymentHandler {
+func NewPaymentHandler(service *services.PaymentService, authService *services.AuthService) *PaymentHandler {
 	return &PaymentHandler{
-		Service: service,
+		Service:     service,
+		AuthService: authService,
 	}
 }
 
-func (h *PaymentHandler) writePaymentError(w http.ResponseWriter, err error) {
-	message := err.Error()
+func (h *PaymentHandler) GetPaymentsByClientID(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		http.Error(w, "Token tidak ditemukan", http.StatusUnauthorized)
+		return
+	}
+	token := strings.TrimPrefix(authHeader, "Bearer ")
 
-	if strings.Contains(message, "tidak ditemukan") {
-		http.Error(w, message, http.StatusNotFound)
+	profile, err := h.AuthService.GetProfileByToken(token)
+	if err != nil {
+		http.Error(w, "Token tidak valid", http.StatusUnauthorized)
 		return
 	}
 
-	http.Error(w, message, http.StatusInternalServerError)
-}
-
-func (h *PaymentHandler) GetPayments(w http.ResponseWriter, r *http.Request) {
-	payments, err := h.Service.GetPayments(r.Context())
-
+	client, err := h.Service.GetClientByProfileID(profile.ID)
 	if err != nil {
-		h.writePaymentError(w, err)
+		if err == pgx.ErrNoRows {
+			http.Error(w, "Client tidak ditemukan", http.StatusNotFound)
+		} else {
+			http.Error(w, "Gagal memverifikasi client: "+err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	payments, err := h.Service.GetPaymentsByClientID(client.ID)
+	if err != nil {
+		http.Error(w, "Gagal mengambil data pembayaran", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-
 	json.NewEncoder(w).Encode(payments)
 }
 
 func (h *PaymentHandler) GetPaymentByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	payment, err := h.Service.GetPaymentByID(r.Context(), id)
-
+	payment, err := h.Service.GetPaymentByID(id)
 	if err != nil {
-		h.writePaymentError(w, err)
+		http.Error(w, "Gagal mengambil pembayaran", http.StatusInternalServerError)
+		return
+	}
+	if payment == nil {
+		http.Error(w, "Pembayaran tidak ditemukan", http.StatusNotFound)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-
 	json.NewEncoder(w).Encode(payment)
 }
 
-func (h *PaymentHandler) ApprovePayment(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-
-	var req models.ApprovePaymentRequest
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
-		http.Error(w, "Request tidak valid", http.StatusBadRequest)
+func (h *PaymentHandler) CreatePayment(w http.ResponseWriter, r *http.Request) {
+	var req models.CreatePaymentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Format JSON tidak valid", http.StatusBadRequest)
 		return
 	}
 
-	payment, err := h.Service.ApprovePayment(r.Context(), id, req)
-
+	payment, err := h.Service.CreatePayment(req)
 	if err != nil {
-		message := err.Error()
-
-		if strings.Contains(message, "tidak ditemukan") {
-			http.Error(w, message, http.StatusNotFound)
-			return
-		}
-
-		if strings.Contains(message, "sudah") || strings.Contains(message, "tidak bisa") {
-			http.Error(w, message, http.StatusBadRequest)
-			return
-		}
-
-		h.writePaymentError(w, err)
+		http.Error(w, "Gagal membuat pembayaran: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-
+	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(payment)
 }
 
-func (h *PaymentHandler) RejectPayment(w http.ResponseWriter, r *http.Request) {
+func (h *PaymentHandler) UpdatePayment(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	var req models.RejectPaymentRequest
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
-		http.Error(w, "Request tidak valid", http.StatusBadRequest)
+	var req models.UpdatePaymentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Format JSON tidak valid", http.StatusBadRequest)
 		return
 	}
 
-	payment, err := h.Service.RejectPayment(r.Context(), id, req)
-
+	payment, err := h.Service.UpdatePayment(id, req)
 	if err != nil {
-		message := err.Error()
-
-		if strings.Contains(message, "tidak ditemukan") {
-			http.Error(w, message, http.StatusNotFound)
-			return
-		}
-
-		if strings.Contains(message, "sudah") || strings.Contains(message, "tidak bisa") {
-			http.Error(w, message, http.StatusBadRequest)
-			return
-		}
-
-		h.writePaymentError(w, err)
+		http.Error(w, "Gagal mengupdate pembayaran: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-
 	json.NewEncoder(w).Encode(payment)
+}
+
+func (h *PaymentHandler) DeletePayment(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	err := h.Service.DeletePayment(id)
+	if err != nil {
+		http.Error(w, "Gagal menghapus pembayaran: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

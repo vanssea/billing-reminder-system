@@ -1,4 +1,5 @@
 const API_URL = "http://localhost:8080/api/products";
+const CLIENT_API_URL = "http://localhost:8080/api/client";
 const ADMIN_PRODUCT_API_URL = "http://localhost:8080/api/admin/products";
 
 export async function getProducts() {
@@ -67,6 +68,18 @@ export async function deleteProduct(id) {
 
   return true;
 }
+
+export async function purchaseProduct(productId, billingCycle, token) {
+  const response = await fetch(`${CLIENT_API_URL}/purchase`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      product_id: productId,
+      billing_cycle: billingCycle,
+    }),
 // ==========================================
 // FUNGSI TAMBAHAN KHUSUS UNTUK ADMIN PRODUCT
 // ==========================================
@@ -95,6 +108,7 @@ export async function updateProductStatus(id, newStatus) {
 
   if (!response.ok) {
     const message = await response.text();
+    throw new Error(message || "Gagal membuat permintaan pembelian");
     throw new Error(message || "Gagal mengubah status produk");
   }
 

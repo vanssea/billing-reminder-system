@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"billing-reminder-system/models"
 
@@ -16,12 +17,14 @@ import (
 )
 
 type AuthService struct {
-	DB *pgxpool.Pool
+	DB           *pgxpool.Pool
+	ClientService *ClientService
 }
 
-func NewAuthService(db *pgxpool.Pool) *AuthService {
+func NewAuthService(db *pgxpool.Pool, clientService *ClientService) *AuthService {
 	return &AuthService{
-		DB: db,
+		DB:            db,
+		ClientService: clientService,
 	}
 }
 
@@ -38,6 +41,9 @@ func (s *AuthService) Register(req models.RegisterRequest) (*models.AuthUser, er
 		"email":         req.Email,
 		"password":      req.Password,
 		"email_confirm": true,
+		"user_metadata": map[string]interface{}{
+			"full_name": req.FullName,
+		},
 	}
 
 	body, err := json.Marshal(payload)
@@ -84,23 +90,38 @@ func (s *AuthService) Register(req models.RegisterRequest) (*models.AuthUser, er
 		return nil, err
 	}
 
-	// Simpan profil sebagai CLIENT
+	// Tunggu profil dibuat oleh trigger (retry 3x)
 	var profile models.AuthUser
-
-	err = s.DB.QueryRow(
-		context.Background(),
-		`INSERT INTO profiles (id, full_name, role)
-		 VALUES ($1, $2, 'CLIENT')
-		 RETURNING id, full_name, role`,
-		authUser.ID,
-		req.FullName,
-	).Scan(&profile.ID, &profile.FullName, &profile.Role)
+	for i := 0; i < 3; i++ {
+		err = s.DB.QueryRow(
+			context.Background(),
+			`SELECT id, full_name, role FROM profiles WHERE id = $1`,
+			authUser.ID,
+		).Scan(&profile.ID, &profile.FullName, &profile.Role)
+		if err == nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("profil tidak ditemukan setelah register: %w", err)
 	}
 
 	profile.Email = req.Email
+
+	// Buat client record via ClientService (handle upsert)
+	_, err = s.ClientService.CreateOrUpdateClientByProfileID(profile.ID, UpdateClientRequest{
+		CompanyName: "",
+		PICName:     req.FullName,
+		Email:       req.Email,
+		Phone:       nil,
+		Address:     nil,
+		Status:      "ACTIVE",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("gagal membuat client record: %w", err)
+	}
 
 	return &profile, nil
 }

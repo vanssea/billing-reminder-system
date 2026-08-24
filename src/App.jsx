@@ -2,6 +2,10 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import ScrollToTop from "./components/ScrollToTop";
 import ProtectedRoute from "./components/ProtectedRoute";
+import MainLayout from "./components/layout/MainLayout";
+import ClientInvoices from "./pages/client/MyInvoices";
+import ClientPayments from "./pages/client/Payments";
+import ClientProfile from "./pages/client/Profile";
 import { AuthProvider } from "./context/AuthContext";
 
 // Auth
@@ -13,6 +17,8 @@ import ResetPassword from "./pages/auth/ResetPassword";
 
 // Client
 import ClientDashboard from "./pages/client/Dashboard";
+import ClientProducts from "./pages/client/Products";
+import InvoiceDetail from "./pages/client/InvoiceDetail";
 
 // Admin
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -67,12 +73,20 @@ function App() {
 
         {/* ==================== CLIENT ==================== */}
         <Route
-          path="/client/dashboard"
+          path="/client"
           element={
             <ProtectedRoute roles={["CLIENT"]}>
-              <ClientDashboard />
+              <MainLayout />
             </ProtectedRoute>
           }
+        >
+          <Route path="dashboard" element={<ClientDashboard />} />
+          <Route path="invoices" element={<ClientInvoices />} />
+          <Route path="invoices/:id" element={<InvoiceDetail />} />
+          <Route path="payments" element={<ClientPayments />} />
+          <Route path="products" element={<ClientProducts />} />
+          <Route path="profile" element={<ClientProfile />} />
+        </Route>
         />
 
         {/* ==================== ADMIN ==================== */}

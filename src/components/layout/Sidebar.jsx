@@ -1,30 +1,44 @@
 import { useLocation, useNavigate } from "react-router-dom";
+import {
+  BarChart3,
+  BellRing,
+  ChevronsLeft,
+  ChevronsRight,
+  CreditCard,
+  LayoutDashboard,
+  ReceiptText,
+  Server,
+  Settings,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
+import { Logo } from "../landing/Navbar";
 
 const superadminMenu = {
   subtitle: "Super Admin Panel",
   items: [
-    { label: "Dashboard", icon: "dashboard", path: "/superadmin/dashboard" },
-    { label: "Admin Management", icon: "admin_panel_settings", path: "/superadmin/admins" },
-    { label: "Client Management", icon: "group", path: "/superadmin/clients" },
-    { label: "Product Management", icon: "dns", path: "/superadmin/products" },
-    { label: "Invoice Management", icon: "receipt_long", path: "/superadmin/invoices" },
-    { label: "Reminder Management", icon: "notifications_active", path: "/superadmin/reminders" },
-    { label: "Payment Management", icon: "payments", path: "/superadmin/payments" },
-    { label: "Reports", icon: "assessment", path: "/superadmin/reports" },
+    { label: "Dashboard", icon: LayoutDashboard, path: "/superadmin/dashboard" },
+    { label: "Admin Management", icon: ShieldCheck, path: "/superadmin/admins" },
+    { label: "Client Management", icon: Users, path: "/superadmin/clients" },
+    { label: "Product Management", icon: Server, path: "/superadmin/products" },
+    { label: "Invoice Management", icon: ReceiptText, path: "/superadmin/invoices" },
+    { label: "Reminder Management", icon: BellRing, path: "/superadmin/reminders" },
+    { label: "Payment Management", icon: CreditCard, path: "/superadmin/payments" },
+    { label: "Reports", icon: BarChart3, path: "/superadmin/reports" },
   ],
-  bottomItems: [{ label: "Settings", icon: "settings", path: "/superadmin/settings" }],
+  bottomItems: [{ label: "Settings", icon: Settings, path: "/superadmin/settings" }],
 };
 
 const adminMenu = {
   subtitle: "Admin Panel",
   items: [
-    { label: "Dashboard", icon: "dashboard", path: "/admin/dashboard" },
-    { label: "Clients", icon: "group", path: "/admin/clients" },
-    { label: "Products", icon: "dns", path: "/admin/products" },
-    { label: "Invoices", icon: "receipt_long", path: "/admin/invoices" },
-    { label: "Payments", icon: "payments", path: "/admin/payments" },
-    { label: "Reminders", icon: "notifications_active", path: "/admin/reminders" },
-    { label: "Reports", icon: "assessment", path: "/admin/reports" },
+    { label: "Dashboard", icon: LayoutDashboard, path: "/admin/dashboard" },
+    { label: "Clients", icon: Users, path: "/admin/clients" },
+    { label: "Products", icon: Server, path: "/admin/products" },
+    { label: "Invoices", icon: ReceiptText, path: "/admin/invoices" },
+    { label: "Payments", icon: CreditCard, path: "/admin/payments" },
+    { label: "Reminders", icon: BellRing, path: "/admin/reminders" },
+    { label: "Reports", icon: BarChart3, path: "/admin/reports" },
   ],
   bottomItems: [],
 };
@@ -32,122 +46,167 @@ const adminMenu = {
 const clientMenu = {
   subtitle: "Client Panel",
   items: [
-    { label: "Dashboard", icon: "dashboard", path: "/client/dashboard" },
-    { label: "My Invoices", icon: "receipt_long", path: "/client/invoices" },
-    { label: "Payments", icon: "payments", path: "/client/payments" },
+    { label: "Dashboard", icon: LayoutDashboard, path: "/client/dashboard" },
+    { label: "My Invoices", icon: ReceiptText, path: "/client/invoices" },
+    { label: "Payments", icon: CreditCard, path: "/client/payments" },
+    { label: "Buy Package", icon: Server, path: "/client/products" },
   ],
   bottomItems: [],
 };
 
-export default function Sidebar({ role = "superadmin" }) {
+function Tooltip({ label, collapsed }) {
+  if (!collapsed) return null;
+
+  return (
+    <span className="pointer-events-none absolute left-full top-1/2 z-[60] ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+      {label}
+    </span>
+  );
+}
+
+export default function Sidebar({
+  role = "superadmin",
+  collapsed = false,
+  onToggle,
+}) {
   const navigate = useNavigate();
   const location = useLocation();
   const menu =
     role === "admin" ? adminMenu : role === "client" ? clientMenu : superadminMenu;
 
   const allItems = [...menu.items, ...menu.bottomItems];
-  const activeLabel =
-    allItems.find((item) => item.path === location.pathname)?.label ||
-    menu.items[0].label;
+const activeLabel =
+  allItems.find((item) => location.pathname.startsWith(item.path))?.label ||
+  menu.items[0].label;
+
+  const itemClassName = (isActive) =>
+    `group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${collapsed ? "justify-center px-0" : ""
+    } ${isActive
+      ? collapsed
+        ? "bg-brand-600/10 text-brand-600"
+        : "bg-gradient-to-r from-brand-600 to-brand-500 font-bold text-white shadow-lg shadow-brand-600/30"
+      : "text-slate-600 hover:bg-brand-50 hover:text-brand-600"
+    }`;
 
   return (
-    <aside className="fixed left-0 top-0 z-50 hidden h-screen w-[280px] flex-col border-r border-[#c7c4d8] bg-white md:flex">
+    <aside
+      className={`fixed left-0 top-0 z-50 hidden h-screen flex-col border-r border-slate-200/70 bg-white/85 backdrop-blur-xl transition-all duration-300 print:hidden md:flex ${collapsed ? "w-20" : "w-[280px]"
+        }`}
+    >
       <div className="flex h-full flex-col">
-        {/* Logo */}
-        <button
-          type="button"
-          onClick={() => navigate(menu.items[0].path)}
-          className="flex h-16 shrink-0 items-center border-b border-[#e0e3e5] px-4 text-left"
+        <div
+          className={`relative flex h-16 shrink-0 items-center border-b border-slate-200/70 px-4 ${collapsed ? "justify-center" : ""
+            }`}
         >
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#3525cd] text-base font-bold text-white">
-              HF
-            </div>
+          <button
+            type="button"
+            onClick={() => navigate(menu.items[0].path)}
+            aria-label="HostFlow"
+            className="group relative text-left"
+          >
+            <Logo compact={collapsed} />
 
-            <div>
-              <h1 className="truncate text-lg font-bold text-[#3525cd]">
-                HostFlow
-              </h1>
+            <Tooltip label="HostFlow" collapsed={collapsed} />
+          </button>
 
-              <p className="text-[11px] font-medium text-[#777587]">
-                {menu.subtitle}
-              </p>
-            </div>
-          </div>
-        </button>
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label={collapsed ? "Perluas sidebar" : "Minimalkan sidebar"}
+            title={collapsed ? "Perluas sidebar" : "Minimalkan sidebar"}
+            className="absolute right-[-12px] top-5 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-md transition hover:border-brand-300 hover:text-brand-600"
+          >
+            {collapsed ? (
+              <ChevronsRight size={14} />
+            ) : (
+              <ChevronsLeft size={14} />
+            )}
+          </button>
+        </div>
 
-        {/* Navigation */}
-        <nav className="flex flex-1 flex-col overflow-y-auto px-3 py-5">
+        <nav
+          className={`flex flex-1 flex-col px-3 py-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${collapsed ? "overflow-visible" : "overflow-y-auto"
+            }`}
+        >
+          {!collapsed && (
+            <p className="px-3 pb-3 text-[11px] font-bold uppercase tracking-widest text-slate-400">
+              {menu.subtitle}
+            </p>
+          )}
+
           <div className="space-y-1">
             {menu.items.map((item) => {
               const isActive = activeLabel === item.label;
+              const Icon = item.icon;
 
               return (
                 <button
                   key={item.label}
                   type="button"
                   onClick={() => navigate(item.path)}
+                  aria-label={item.label}
                   aria-current={isActive ? "page" : undefined}
-                  className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3525cd] ${
-                    isActive
-                      ? "bg-[#3525cd]/10 font-bold text-[#3525cd]"
-                      : "text-[#464555] hover:bg-[#f0ecf9] hover:text-[#3525cd]"
-                  }`}
+                  className={itemClassName(isActive)}
                 >
-                  <span
-                    className="material-symbols-outlined shrink-0 text-[22px]"
-                    style={
-                      isActive
-                        ? { fontVariationSettings: "'FILL' 1" }
-                        : undefined
-                    }
-                  >
-                    {item.icon}
-                  </span>
+                  {collapsed && isActive && (
+                    <span className="absolute -left-3 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-brand-600" />
+                  )}
 
-                  <span className="truncate font-medium">{item.label}</span>
+                  <Icon
+                    size={20}
+                    strokeWidth={isActive ? 2.4 : 2}
+                    className="shrink-0"
+                  />
+
+                  {!collapsed && (
+                    <span className="truncate font-medium">{item.label}</span>
+                  )}
+
+                  <Tooltip label={item.label} collapsed={collapsed} />
                 </button>
               );
             })}
           </div>
 
-          {/* Bottom section */}
-          {menu.bottomItems.length > 0 && (
-            <div className="mt-auto border-t border-[#e0e3e5] pt-3">
-              <div className="space-y-1">
-                {menu.bottomItems.map((item) => {
-                  const isActive = activeLabel === item.label;
+          <div className="mt-auto">
+            {menu.bottomItems.length > 0 && (
+              <div className="border-t border-slate-200/70 pt-3">
+                <div className="space-y-1">
+                  {menu.bottomItems.map((item) => {
+                    const isActive = activeLabel === item.label;
+                    const Icon = item.icon;
 
-                  return (
-                    <button
-                      key={item.label}
-                      type="button"
-                      onClick={() => navigate(item.path)}
-                      aria-current={isActive ? "page" : undefined}
-                      className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3525cd] ${
-                        isActive
-                          ? "bg-[#3525cd]/10 font-bold text-[#3525cd]"
-                          : "text-[#464555] hover:bg-[#f0ecf9] hover:text-[#3525cd]"
-                      }`}
-                    >
-                      <span
-                        className="material-symbols-outlined shrink-0 text-[22px]"
-                        style={
-                          isActive
-                            ? { fontVariationSettings: "'FILL' 1" }
-                            : undefined
-                        }
+                    return (
+                      <button
+                        key={item.label}
+                        type="button"
+                        onClick={() => navigate(item.path)}
+                        aria-label={item.label}
+                        aria-current={isActive ? "page" : undefined}
+                        className={itemClassName(isActive)}
                       >
-                        {item.icon}
-                      </span>
+                        {collapsed && isActive && (
+                          <span className="absolute -left-3 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-brand-600" />
+                        )}
 
-                      <span className="truncate font-medium">{item.label}</span>
-                    </button>
-                  );
-                })}
+                        <Icon
+                          size={20}
+                          strokeWidth={isActive ? 2.4 : 2}
+                          className="shrink-0"
+                        />
+
+                        {!collapsed && (
+                          <span className="truncate font-medium">{item.label}</span>
+                        )}
+
+                        <Tooltip label={item.label} collapsed={collapsed} />
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </nav>
       </div>
     </aside>

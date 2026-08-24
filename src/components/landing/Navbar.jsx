@@ -10,15 +10,22 @@ const navLinks = [
   { label: "FAQ", to: "/#faq" },
 ];
 
-function Logo({ className = "" }) {
+function Logo({ className = "", compact = false }) {
   return (
-    <Link to="/" className={`flex items-center gap-2.5 ${className}`}>
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-brand-400 shadow-lg shadow-brand-600/30">
+    <Link
+      to="/"
+      className={`flex items-center gap-2.5 ${className}`}
+      aria-label="HostFlow"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-brand-400 shadow-lg shadow-brand-600/30">
         <Zap className="h-5 w-5 text-white" fill="currentColor" strokeWidth={0} />
       </span>
-      <span className="text-xl font-extrabold tracking-tight text-slate-900">
-        Host<span className="text-brand-600">Flow</span>
-      </span>
+
+      {!compact && (
+        <span className="text-xl font-extrabold tracking-tight text-slate-900">
+          Host<span className="text-brand-600">Flow</span>
+        </span>
+      )}
     </Link>
   );
 }

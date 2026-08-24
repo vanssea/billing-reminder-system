@@ -11,6 +11,7 @@ func ClientRoutes(router *chi.Mux, clientHandler *handlers.ClientHandler) {
 	router.Get("/api/clients", clientHandler.GetClients)
 	router.Post("/api/clients", clientHandler.CreateClient)
 	router.Get("/api/clients/{id}", clientHandler.GetClientByID)
+	router.Get("/api/clients/profile/{profile_id}", clientHandler.GetClientByProfileID)
 	router.Put("/api/clients/{id}", clientHandler.UpdateClient)
 	router.Delete("/api/clients/{id}", clientHandler.DeleteClient)
 

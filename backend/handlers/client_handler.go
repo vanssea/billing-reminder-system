@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"strconv"
 
 	"billing-reminder-system/services"
@@ -11,12 +12,14 @@ import (
 )
 
 type ClientHandler struct {
-	Service *services.ClientService
+	Service     *services.ClientService
+	AuthService *services.AuthService
 }
 
-func NewClientHandler(service *services.ClientService) *ClientHandler {
+func NewClientHandler(clientService *services.ClientService, authService *services.AuthService) *ClientHandler {
 	return &ClientHandler{
-		Service: service,
+		Service:     clientService,
+		AuthService: authService,
 	}
 }
 
@@ -122,4 +125,48 @@ func (h *ClientHandler) DeleteClient(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *ClientHandler) GetClientByProfileID(w http.ResponseWriter, r *http.Request) {
+	profileID := chi.URLParam(r, "profile_id")
+
+	client, err := h.Service.GetClientByProfileID(profileID)
+	if err != nil {
+		http.Error(w, "Client tidak ditemukan", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(client)
+}
+
+func (h *ClientHandler) CreateOrUpdateClientProfile(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		http.Error(w, "Token tidak ditemukan", http.StatusUnauthorized)
+		return
+	}
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+
+	profile, err := h.AuthService.GetProfileByToken(token)
+	if err != nil {
+		http.Error(w, "Token tidak valid", http.StatusUnauthorized)
+		return
+	}
+
+	var req services.UpdateClientRequest
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Format JSON tidak valid", http.StatusBadRequest)
+		return
+	}
+
+	client, err := h.Service.CreateOrUpdateClientByProfileID(profile.ID, req)
+	if err != nil {
+		http.Error(w, "Gagal menyimpan profil: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(client)
 }

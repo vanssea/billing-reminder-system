@@ -1,3 +1,14 @@
+const API_URL = "http://localhost:8080/api/client";
+
+export async function getClientInvoices(token) {
+  const response = await fetch(`${API_URL}/invoices`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Gagal mengambil data invoice");
 const API_URL = "http://localhost:8080/api/invoices";
 
 export async function getInvoices() {
@@ -37,6 +48,19 @@ export async function createInvoice(data) {
   return response.json();
 }
 
+export async function getClientInvoiceById(id, token) {
+  const response = await fetch(`${API_URL}/invoices/${id}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Invoice tidak ditemukan");
+  }
+
+  return response.json();
+}
 export async function updateInvoice(id, data) {
   const response = await fetch(`${API_URL}/${id}`, {
     method: "PUT",

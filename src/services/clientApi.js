@@ -63,6 +63,53 @@ export async function deleteClient(id) {
   return true;
 }
 
+export async function getClientByProfileId(profileId, token) {
+  const response = await fetch(`${API_URL}/profile/${profileId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Client tidak ditemukan");
+  }
+
+  return response.json();
+}
+
+export async function createOrUpdateClientProfile(data, token) {
+  const response = await fetch(`${API_URL}/profile`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Gagal menyimpan profil");
+  }
+
+  return response.json();
+}
+
+export async function createPurchaseRequest(data, token) {
+  const response = await fetch(`${API_URL}/purchase`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Gagal membuat permintaan pembelian");
+  }
+
 export async function updateClientStatus(id, status) {
   const response = await fetch(`${API_URL}/${id}/status`, {
     method: "PATCH",
