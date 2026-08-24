@@ -6,13 +6,23 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 let remember = true;
 
 export function setRememberMode(value) {
-  remember = value;
+  remember = Boolean(value);
 }
 
 const dynamicStorage = {
-  getItem: (key) => (remember ? localStorage : sessionStorage).getItem(key),
-  setItem: (key, value) => (remember ? localStorage : sessionStorage).setItem(key, value),
-  removeItem: (key) => (remember ? localStorage : sessionStorage).removeItem(key),
+  getItem: (key) => {
+    return (
+      localStorage.getItem(key) ??
+      sessionStorage.getItem(key)
+    );
+  },
+  setItem: (key, value) => {
+    (remember ? localStorage : sessionStorage).setItem(key, value);
+  },
+  removeItem: (key) => {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  },
 };
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
