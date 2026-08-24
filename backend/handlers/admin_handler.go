@@ -3,13 +3,11 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	
 
 	"billing-reminder-system/models"
 	"billing-reminder-system/services"
 
 	"github.com/go-chi/chi/v5"
-	
 )
 
 type AdminHandler struct {
@@ -30,9 +28,9 @@ func (h *AdminHandler) GetAdmins(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-
 	json.NewEncoder(w).Encode(admins)
 }
+
 func (h *AdminHandler) CreateAdmin(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateAdminRequest
 
@@ -50,9 +48,9 @@ func (h *AdminHandler) CreateAdmin(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-
 	json.NewEncoder(w).Encode(admin)
 }
+
 func (h *AdminHandler) GetAdminByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -63,9 +61,9 @@ func (h *AdminHandler) GetAdminByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-
 	json.NewEncoder(w).Encode(admin)
 }
+
 func (h *AdminHandler) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -86,6 +84,7 @@ func (h *AdminHandler) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(admin)
 }
+
 func (h *AdminHandler) DeleteAdmin(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -100,4 +99,33 @@ func (h *AdminHandler) DeleteAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *AdminHandler) GetDashboardSummary(w http.ResponseWriter, r *http.Request) {
+	summary, err := h.Service.GetDashboardSummary()
+	if err != nil {
+		http.Error(w, "Gagal memuat dashboard: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(summary)
+}
+
+func (h *AdminHandler) GetSuperAdminDashboard(w http.ResponseWriter, r *http.Request) {
+	dashboard, err := h.Service.GetSuperAdminDashboard()
+	if err != nil {
+		http.Error(w, "Gagal memuat dashboard superadmin: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(dashboard)
+}
+
+func (h *AdminHandler) SuperAdminStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "super admin route aktif tanpa login",
+	})
 }

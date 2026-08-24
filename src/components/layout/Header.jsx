@@ -70,6 +70,52 @@ const Header = ({ role = "admin", collapsed = false }) => {
       .slice(0, 2)
       .toUpperCase() || role.slice(0, 2).toUpperCase();
 
+  const navigate = useNavigate();
+  const menuRef = useRef(null);
+
+  const { user, signOut } = useAuth();
+
+  useEffect(() => {
+    const onClickOutside = (e) => {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(e.target)
+      ) {
+        setShowProfile(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onClickOutside);
+
+    return () =>
+      document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  const displayName =
+    user?.full_name || (role === "admin" ? "Admin" : "User");
+
+  const initial = (displayName[0] || "U").toUpperCase();
+
+  const handleProfileClick = () => {
+    setShowProfile(false);
+
+    const path = profilePathByRole[role];
+
+    if (path) {
+      navigate(path);
+    }
+  };
+
+  const handleLogout = async () => {
+    setShowProfile(false);
+
+    await signOut();
+
+    navigate("/login", {
+      replace: true,
+    });
+  };
+
   return (
     <header
       className={`fixed left-0 right-0 top-0 z-40 h-16 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl transition-all duration-300 print:hidden ${

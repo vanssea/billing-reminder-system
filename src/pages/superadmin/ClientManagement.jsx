@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
+import Sidebar from "../../components/layout/Sidebar";
+import Header from "../../components/layout/Header";
 import {
   Search,
   Plus,
@@ -12,6 +14,11 @@ import {
   AlertTriangle,
   Eye,
   FileText,
+  Phone,
+  CalendarDays,
+  CheckCircle2,
+  Mail,
+  MapPin,
 } from "lucide-react";
 
 import {
@@ -66,7 +73,7 @@ function StatusBadge({ status }) {
 export default function ClientManagement() {
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All Status");
+  const [statusFilter, setStatusFilter] = useState("ALL");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -94,10 +101,11 @@ export default function ClientManagement() {
       setLoading(true);
       setError("");
 
-      const data = await getClients();
+      const res = await getClients(1, 1000);
+      const data = (res && res.data) || res || [];
 
       setClients(
-        (data || []).map((client) => ({
+        data.map((client) => ({
           ...client,
           status: toUiStatus(client.status),
         }))
@@ -146,7 +154,7 @@ export default function ClientManagement() {
       client.email?.toLowerCase().includes(search.toLowerCase());
 
     const matchStatus =
-      statusFilter === "All Status" ||
+      statusFilter === "ALL" ||
       client.status === statusFilter;
 
     return matchSearch && matchStatus;
@@ -183,6 +191,7 @@ export default function ClientManagement() {
     else if (!form.email.includes("@"))
       newErrors.email = "Email harus mengandung @";
     if (!form.phone.trim()) newErrors.phone = "No. Telepon wajib diisi";
+    if (!form.address.trim()) newErrors.address = "Alamat wajib diisi";
 
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) return;
@@ -258,64 +267,110 @@ export default function ClientManagement() {
 
   return (
     <div className="min-h-screen bg-[#fcf8ff] pt-16 md:pl-[280px]">
-      <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
-        {/* Header */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-[#191c1e]">Client Management</h1>
-            <p className="mt-1 text-sm text-[#777587]">
-              Kelola data client dan langganan hosting pada sistem HostFlow.
-            </p>
-          </div>
+      <Sidebar />
+      <Header role="superadmin" />
 
-          <button
-            type="button"
-            onClick={openAdd}
-            className="flex items-center gap-2 rounded-lg bg-[#3525cd] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#2a1db0]"
-          >
-            <Plus className="h-4 w-4" />
-            Tambah Client
-          </button>
+      <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
+        {/* Banner */}
+        <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#3525cd] to-[#5b44f3] p-6 text-white shadow-lg">
+          <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
+          <div className="absolute -bottom-8 right-20 h-28 w-28 rounded-full bg-white/10" />
+          <div className="absolute right-40 -top-6 h-20 w-20 rounded-full bg-white/10" />
+          <div className="absolute -left-6 -bottom-6 h-24 w-24 rounded-full bg-white/10" />
+
+          <div className="relative flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-white/80">Super Admin Panel</p>
+              <h1 className="mt-1 text-2xl font-bold">Client Management</h1>
+              <p className="mt-1 text-sm text-white/80">
+                Kelola data client dan langganan hosting pada sistem HostFlow.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={openAdd}
+              className="flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-[#3525cd] shadow-sm transition hover:bg-white/90"
+            >
+              <Plus className="h-4 w-4" />
+              Tambah Client
+            </button>
+          </div>
         </div>
 
         {error && (
-          <div className="mb-6 flex items-start gap-2 rounded-lg border border-[#ba1a1a]/30 bg-[#ffdad6] px-4 py-3 text-sm font-medium text-[#ba1a1a]">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        {success && (
-          <div className="mb-6 flex items-start gap-2 rounded-lg border border-[#10b981]/30 bg-[#d1fae5] px-4 py-3 text-sm font-medium text-[#0f9d6e]">
-            <UserCheck className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{success}</span>
+          <div className="mb-6 flex items-center gap-3 rounded-xl border border-red-200 bg-gradient-to-r from-red-50 to-red-100 px-4 py-3.5 shadow-sm">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-500">
+              <AlertTriangle size={16} />
+            </div>
+            <span className="text-sm font-medium text-red-700">{error}</span>
           </div>
         )}
 
         {/* Stats */}
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {stats.map((stat) => (
-            <div
-              key={stat.title}
-              className="rounded-xl border border-[#e0e3e5] bg-white p-5 shadow-sm"
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-[#777587]">{stat.title}</p>
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#f0ecf9] text-[#3525cd]">
-                  <stat.icon className="h-5 w-5" />
-                </div>
+          {/* Total Clients */}
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#2563eb] to-[#3b82f6] p-5 text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg">
+            <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/10" />
+            <div className="absolute -bottom-4 right-12 h-16 w-16 rounded-full bg-white/10" />
+            <div className="absolute right-28 -top-4 h-12 w-12 rounded-full bg-white/10" />
+
+            <div className="relative flex items-start justify-between">
+              <div>
+                <p className="text-sm font-medium text-white/80">{stats[0].title}</p>
+                <p className="mt-1 text-3xl font-bold tracking-tight">{stats[0].value}</p>
+                <p className="mt-1 text-xs text-white/70">{stats[0].description}</p>
               </div>
-              <p className="mt-2 text-2xl font-bold text-[#191c1e]">{stat.value}</p>
-              <p className="mt-1 text-xs text-[#9a97a9]">{stat.description}</p>
+              <div className="rounded-xl bg-white/20 p-2.5"><Users size={20} /></div>
             </div>
-          ))}
+          </div>
+
+          {/* Active */}
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#0d9488] to-[#14b8a6] p-5 text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg">
+            <div className="absolute -right-5 -top-5 h-20 w-20 rounded-full bg-white/10" />
+            <div className="absolute -bottom-6 right-16 h-14 w-14 rounded-full bg-white/10" />
+            <div className="absolute right-32 -top-3 h-10 w-10 rounded-full bg-white/10" />
+
+            <div className="relative flex items-start justify-between">
+              <div>
+                <p className="text-sm font-medium text-white/80">{stats[1].title}</p>
+                <p className="mt-1 text-3xl font-bold tracking-tight">{stats[1].value}</p>
+                <p className="mt-1 text-xs text-white/70">{stats[1].description}</p>
+              </div>
+              <div className="rounded-xl bg-white/20 p-2.5"><UserCheck size={20} /></div>
+            </div>
+          </div>
+
+          {/* Inactive */}
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#dc2626] to-[#ef4444] p-5 text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg">
+            <div className="absolute -right-4 -top-4 h-18 w-18 rounded-full bg-white/10" />
+            <div className="absolute -bottom-5 right-14 h-12 w-12 rounded-full bg-white/10" />
+
+            <div className="relative flex items-start justify-between">
+              <div>
+                <p className="text-sm font-medium text-white/80">{stats[2].title}</p>
+                <p className="mt-1 text-3xl font-bold tracking-tight">{stats[2].value}</p>
+                <p className="mt-1 text-xs text-white/70">{stats[2].description}</p>
+              </div>
+              <div className="rounded-xl bg-white/20 p-2.5"><UserX size={20} /></div>
+            </div>
+          </div>
         </div>
+
+        {success && (
+          <div className="mb-6 flex items-center gap-3 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100 px-4 py-3.5 shadow-sm">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-500">
+              <CheckCircle2 size={16} />
+            </div>
+            <span className="text-sm font-medium text-emerald-700">{success}</span>
+          </div>
+        )}
 
         {/* Table Card */}
         <div className="overflow-hidden rounded-xl border border-[#e0e3e5] bg-white shadow-sm">
           {/* Toolbar */}
-          <div className="flex flex-wrap items-center gap-3 border-b border-[#e0e3e5] p-4">
-            <div className="relative min-w-[220px] flex-1">
+          <div className="flex flex-col gap-4 border-b border-[#e0e3e5] p-4 lg:flex-row lg:items-center">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9a97a9]" />
               <input
                 type="text"
@@ -326,15 +381,20 @@ export default function ClientManagement() {
               />
             </div>
 
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className="rounded-lg border border-[#c7c4d8] bg-white px-3 py-2 text-sm text-[#464555] outline-none transition focus:border-[#3525cd]"
-            >
-              <option>All Status</option>
-              <option>Active</option>
-              <option>Inactive</option>
-            </select>
+            <div className="flex flex-1 items-center gap-1 rounded-xl bg-[#f3f1f7] p-1">
+              {[{ key: "ALL", label: "Semua" }, { key: "Active", label: "Aktif" }, { key: "Inactive", label: "Nonaktif" }].map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => setStatusFilter(s.key)}
+                  className={`flex-1 rounded-lg px-3.5 py-2 text-xs font-bold whitespace-nowrap transition ${
+                    statusFilter === s.key ? "bg-white text-[#3525cd] shadow-sm" : "text-[#8b8898] hover:text-[#464555]"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Table */}
@@ -427,31 +487,41 @@ export default function ClientManagement() {
 
         {/* Modal Tambah/Edit */}
         {modalOpen && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md rounded-xl border border-[#e0e3e5] bg-white shadow-xl">
-              <div className="flex items-center justify-between border-b border-[#e0e3e5] px-5 py-4">
-                <div>
-                  <h2 className="text-lg font-bold text-[#191c1e]">
-                    {editingId ? "Edit Client" : "Tambah Client"}
-                  </h2>
-                  <p className="text-xs text-[#777587]">
-                    {editingId
-                      ? "Perbarui data client di bawah ini."
-                      : "Isi data client baru untuk ditambahkan."}
-                  </p>
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md overflow-hidden rounded-2xl border border-[#e0e3e5] bg-white shadow-2xl">
+              {/* Header */}
+              <div className="relative bg-gradient-to-r from-[#3525cd] to-[#5b44f3] px-6 py-5 text-white">
+                <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-white/10" />
+                <div className="absolute -bottom-3 right-10 h-12 w-12 rounded-full bg-white/10" />
+
+                <div className="relative flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
+                    {editingId ? <Pencil size={18} /> : <Plus size={18} />}
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold">
+                      {editingId ? "Edit Client" : "Tambah Client"}
+                    </h2>
+                    <p className="text-xs text-white/80">
+                      {editingId
+                        ? "Perbarui data client di bawah ini."
+                        : "Isi data client baru untuk ditambahkan."}
+                    </p>
+                  </div>
                 </div>
+
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[#464555] transition hover:bg-[#eceef0]"
+                  className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-lg text-white/80 transition hover:bg-white/20 hover:text-white"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="space-y-4 px-5 py-5">
+              <div className="space-y-4 px-6 py-6">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-[#464555]">
+                  <label className="mb-1.5 block text-sm font-semibold text-[#464555]">
                     Nama Perusahaan / Client
                   </label>
                   <input
@@ -468,7 +538,7 @@ export default function ClientManagement() {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-[#464555]">
+                  <label className="mb-1.5 block text-sm font-semibold text-[#464555]">
                     Nama PIC
                   </label>
                   <input
@@ -485,7 +555,7 @@ export default function ClientManagement() {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-[#464555]">
+                  <label className="mb-1.5 block text-sm font-semibold text-[#464555]">
                     Email
                   </label>
                   <input
@@ -502,7 +572,7 @@ export default function ClientManagement() {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-[#464555]">
+                  <label className="mb-1.5 block text-sm font-semibold text-[#464555]">
                     No. Telepon
                   </label>
                   <input
@@ -522,7 +592,7 @@ export default function ClientManagement() {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-[#464555]">
+                  <label className="mb-1.5 block text-sm font-semibold text-[#464555]">
                     Alamat
                   </label>
                   <textarea
@@ -540,7 +610,7 @@ export default function ClientManagement() {
 
                 {editingId && (
                   <div>
-                    <label className="mb-1.5 block text-sm font-medium text-[#464555]">
+                    <label className="mb-1.5 block text-sm font-semibold text-[#464555]">
                       Status
                     </label>
                     <select
@@ -557,18 +627,18 @@ export default function ClientManagement() {
                 )}
               </div>
 
-              <div className="flex justify-end gap-2 border-t border-[#e0e3e5] px-5 py-4">
+              <div className="flex justify-end gap-3 border-t border-[#e0e3e5] px-6 py-4">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="rounded-lg border border-[#c7c4d8] px-4 py-2 text-sm font-semibold text-[#464555] transition hover:bg-[#eceef0]"
+                  className="rounded-xl border border-[#c7c4d8] px-5 py-2.5 text-sm font-semibold text-[#464555] transition hover:bg-[#eceef0]"
                 >
                   Batal
                 </button>
                 <button
                   type="button"
                   onClick={handleSave}
-                  className="rounded-lg bg-[#3525cd] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2a1db0]"
+                  className="rounded-xl bg-gradient-to-r from-[#3525cd] to-[#5b44f3] px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:shadow-lg"
                 >
                   {editingId ? "Simpan Perubahan" : "Tambah Client"}
                 </button>
@@ -579,116 +649,256 @@ export default function ClientManagement() {
 
         {/* Modal Konfirmasi Hapus */}
         {deleteTarget && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-sm rounded-xl border border-[#e0e3e5] bg-white p-5 shadow-xl">
-              <div className="flex flex-col items-center text-center">
-                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#ffdad6] text-[#ba1a1a]">
-                  <AlertTriangle className="h-7 w-7" />
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-[#e0e3e5] bg-white shadow-2xl">
+              {/* Header */}
+              <div className="relative bg-gradient-to-r from-[#dc2626] to-[#ef4444] px-6 py-5 text-white">
+                <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-white/10" />
+                <div className="absolute -bottom-3 right-10 h-12 w-12 rounded-full bg-white/10" />
+
+                <div className="relative flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
+                    <Trash2 size={18} />
+                  </div>
+                  <h2 className="text-lg font-bold">Hapus Client?</h2>
                 </div>
 
-                <h2 className="text-lg font-bold text-[#191c1e]">Hapus Client?</h2>
-
-                <p className="mt-2 text-sm text-[#777587]">
-                  Yakin ingin menghapus client{" "}
-                  <span className="font-semibold text-[#191c1e]">
-                    "{deleteTarget.company_name}"
-                  </span>
-                  ? Tindakan ini tidak dapat dibatalkan.
-                </p>
-
-                <div className="mt-6 flex w-full gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDeleteTarget(null)}
-                    className="flex-1 rounded-lg border border-[#c7c4d8] px-4 py-2.5 text-sm font-semibold text-[#464555] transition hover:bg-[#eceef0]"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="button"
-                    onClick={confirmDelete}
-                    className="flex-1 rounded-lg bg-[#ba1a1a] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#9c1616]"
-                  >
-                    Hapus
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal Detail */}
-        {detailTarget && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md rounded-xl border border-[#e0e3e5] bg-white shadow-xl">
-              <div className="flex items-center justify-between border-b border-[#e0e3e5] px-5 py-4">
-                <div>
-                  <h2 className="text-lg font-bold text-[#191c1e]">Detail Client</h2>
-                  <p className="text-xs text-[#777587]">
-                    Informasi lengkap client pada sistem HostFlow.
-                  </p>
-                </div>
                 <button
                   type="button"
-                  onClick={() => setDetailTarget(null)}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[#464555] transition hover:bg-[#eceef0]"
+                  onClick={() => setDeleteTarget(null)}
+                  className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-lg text-white/80 transition hover:bg-white/20 hover:text-white"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="px-5 py-5">
-                <div className="mb-5 flex items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#e2dfff] text-base font-bold text-[#3525cd]">
-                    {(detailTarget.company_name || "")
-                      .split(" ")
-                      .map((word) => word[0])
-                      .slice(0, 2)
-                      .join("") || "?"}
+              <div className="px-6 py-6">
+                <div className="mb-5 flex items-center gap-3 rounded-xl bg-[#fef2f2] p-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#fee2e2] text-[#dc2626]">
+                    <AlertTriangle size={20} />
                   </div>
+                  <p className="text-sm text-[#991b1b]">
+                    Yakin ingin menghapus client{" "}
+                    <span className="font-bold">"{deleteTarget.company_name}"</span>
+                    ? Tindakan ini tidak dapat dibatalkan.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 border-t border-[#e0e3e5] px-6 py-4">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(null)}
+                  className="rounded-xl border border-[#c7c4d8] px-5 py-2.5 text-sm font-semibold text-[#464555] transition hover:bg-[#eceef0]"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDelete}
+                  className="rounded-xl bg-gradient-to-r from-[#dc2626] to-[#ef4444] px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:shadow-lg"
+                >
+                  Hapus
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Detail Client */}
+        {detailTarget && (
+          <div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-[1px]"
+            onClick={() => setDetailTarget(null)}
+          >
+            <div
+              className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-[#e0e3e5] bg-white shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header Detail - mengikuti gaya screenshot detail */}
+              <div className="relative overflow-hidden bg-gradient-to-r from-[#3525cd] via-[#4a3ae0] to-[#6d5cff] px-6 py-5 text-white">
+                <div className="absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/10" />
+                <div className="absolute right-16 bottom-[-34px] h-28 w-28 rounded-full bg-white/10" />
+                <div className="absolute -left-10 bottom-[-45px] h-28 w-28 rounded-full bg-white/[0.06]" />
+
+                <div className="relative flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20">
+                      <Globe size={21} />
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold">{detailTarget.company_name}</p>
+                      <p className="text-sm text-white/75">Detail Client</p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setDetailTarget(null)}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 text-white transition hover:bg-white/25"
+                    title="Tutup"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="relative mt-5 flex items-end justify-between gap-4">
                   <div>
-                    <p className="font-semibold text-[#191c1e]">
-                      {detailTarget.company_name}
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-white/70">
+                      STATUS CLIENT
                     </p>
-                    <div className="mt-0.5">
+                    <div className="mt-1">
                       <StatusBadge status={detailTarget.status} />
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-[11px] uppercase tracking-wider text-white/70">
+                      TERDAFTAR
+                    </p>
+                    <p className="mt-1 text-sm font-semibold">
+                      {detailTarget.created_at
+                        ? new Date(detailTarget.created_at).toLocaleDateString("id-ID", {
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                          })
+                        : "-"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Detail Content */}
+              <div className="px-6 py-5">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-[#e7e5f4] bg-[#faf9ff] p-4">
+                    <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-[#3525cd]/10 text-[#3525cd]">
+                      <Users size={16} />
+                    </div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9a97a9]">
+                      PIC
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-[#191c1e]">
+                      {detailTarget.pic_name || "-"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-[#ccfbf1] bg-[#f0fdfa] p-4">
+                    <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-[#0d9488]/10 text-[#0d9488]">
+                      <Phone size={16} />
+                    </div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#64748b]">
+                      No. Telepon
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-[#191c1e]">
+                      {detailTarget.phone || "-"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-[#fecdd3] bg-[#fff1f2] p-4">
+                    <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-[#ef4444]/10 text-[#ef4444]">
+                      <Mail size={16} />
+                    </div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#64748b]">
+                      Email
+                    </p>
+                    <p
+                      className="mt-1 truncate text-sm font-bold text-[#191c1e]"
+                      title={detailTarget.email}
+                    >
+                      {detailTarget.email || "-"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-[#fde68a] bg-[#fffbeb] p-4">
+                    <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-[#f59e0b]/10 text-[#f59e0b]">
+                      <CalendarDays size={16} />
+                    </div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#92400e]">
+                      Tanggal Terdaftar
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-[#191c1e]">
+                      {detailTarget.created_at
+                        ? new Date(detailTarget.created_at).toLocaleDateString("id-ID")
+                        : "-"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Alamat */}
+                <div className="mt-3 rounded-xl border border-[#e7e5f4] bg-[#faf9ff] p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#3525cd]/10 text-[#3525cd]">
+                      <MapPin size={16} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9a97a9]">
+                        Alamat
+                      </p>
+                      <p className="mt-1 text-sm font-semibold leading-snug text-[#191c1e]">
+                        {detailTarget.address || "-"}
+                      </p>
                     </div>
                   </div>
                 </div>
 
-                <dl className="space-y-3">
-                  {[
-                    ["Email", detailTarget.email],
-                    ["Nama PIC", detailTarget.pic_name || "-"],
-                    ["No. Telepon", detailTarget.phone || "-"],
-                    ["Alamat", detailTarget.address || "-"],
-                    [
-                      "Terdaftar",
-                      detailTarget.created_at
-                        ? new Date(detailTarget.created_at).toLocaleDateString(
-                            "id-ID"
-                          )
-                        : "-",
-                    ],
-                  ].map(([label, value]) => (
+                {/* Ringkasan status */}
+                <div className="mt-3 overflow-hidden rounded-xl border border-[#e0e3e5]">
+                  <div
+                    className={`flex items-center gap-3 px-4 py-3 ${
+                      detailTarget.status === "Active"
+                        ? "bg-[#ecfdf5]"
+                        : "bg-[#f1f5f9]"
+                    }`}
+                  >
                     <div
-                      key={label}
-                      className="flex items-start justify-between gap-4"
+                      className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                        detailTarget.status === "Active"
+                          ? "bg-[#10b981]/15 text-[#10b981]"
+                          : "bg-[#94a3b8]/15 text-[#94a3b8]"
+                      }`}
                     >
-                      <dt className="text-sm text-[#777587]">{label}</dt>
-                      <dd className="text-right text-sm font-medium text-[#191c1e]">
-                        {value}
-                      </dd>
+                      {detailTarget.status === "Active" ? (
+                        <CheckCircle2 size={16} />
+                      ) : (
+                        <UserX size={16} />
+                      )}
                     </div>
-                  ))}
-                </dl>
+                    <div>
+                      <p
+                        className={`text-sm font-bold ${
+                          detailTarget.status === "Active"
+                            ? "text-[#065f46]"
+                            : "text-[#475569]"
+                        }`}
+                      >
+                        {detailTarget.status === "Active"
+                          ? "Client Aktif"
+                          : "Client Tidak Aktif"}
+                      </p>
+                      <p
+                        className={`text-[11px] ${
+                          detailTarget.status === "Active"
+                            ? "text-[#059669]"
+                            : "text-[#94a3b8]"
+                        }`}
+                      >
+                        {detailTarget.status === "Active"
+                          ? "Langganan hosting aktif dan berjalan"
+                          : "Akun client tidak aktif"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex justify-end border-t border-[#e0e3e5] px-5 py-4">
+              {/* Footer */}
+              <div className="flex justify-end border-t border-[#e0e3e5] px-6 py-4">
                 <button
                   type="button"
                   onClick={() => setDetailTarget(null)}
-                  className="rounded-lg bg-[#3525cd] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2a1db0]"
+                  className="rounded-xl bg-gradient-to-r from-[#3525cd] to-[#5b44f3] px-6 py-2.5 text-sm font-semibold text-white shadow-md transition hover:shadow-lg"
                 >
                   Tutup
                 </button>

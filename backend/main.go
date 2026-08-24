@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"time"
@@ -27,6 +28,11 @@ func main() {
 	defer db.Close()
 
 	// Membuat service
+	pdfService := services.NewPDFService()
+	waService, waErr := services.NewWhatsAppService()
+	if waErr != nil {
+		log.Printf("WhatsApp service tidak aktif: %v (notifikasi WA dilewati)", waErr)
+	}
 	clientService := services.NewClientService(db)
 	adminService := services.NewAdminService(db)
 	productService := services.NewProductService(db)
@@ -36,6 +42,16 @@ func main() {
 	invoiceService := services.NewInvoiceService(db, clientService)
 	paymentService := services.NewPaymentService(db, clientService)
 	purchaseService := services.NewPurchaseService(db, clientService, productService)
+	authService := services.NewAuthService(db)
+	invoiceService := services.NewInvoiceService(db)
+	invoiceService.WhatsApp = waService
+	invoiceService.PDF = pdfService
+	reminderService := services.NewReminderService(db)
+	reminderService.WhatsApp = waService
+	reminderService.PDF = pdfService
+	paymentService := services.NewPaymentService(db)
+	paymentService.WhatsApp = waService
+	appNotificationService := services.NewAppNotificationService(db)
 
 	// Membuat handler
 	clientHandler := handlers.NewClientHandler(clientService, authService)
@@ -47,6 +63,11 @@ func main() {
 	invoiceHandler := handlers.NewInvoiceHandler(invoiceService, authService)
 	paymentHandler := handlers.NewPaymentHandler(paymentService, authService)
 	purchaseHandler := handlers.NewPurchaseHandler(purchaseService, authService)
+	invoiceHandler := handlers.NewInvoiceHandler(invoiceService)
+	reminderHandler := handlers.NewReminderHandler(reminderService)
+	paymentHandler := handlers.NewPaymentHandler(paymentService)
+	whatsappHandler := handlers.NewWhatsAppHandler(waService, pdfService)
+	appNotificationHandler := handlers.NewAppNotificationHandler(appNotificationService)
 
 	// Setup router
 	router := chi.NewRouter()
@@ -61,6 +82,7 @@ func main() {
 			"GET",
 			"POST",
 			"PUT",
+			"PATCH",
 			"DELETE",
 			"OPTIONS",
 		},
@@ -86,13 +108,24 @@ func main() {
 	routes.ClientPaymentRoutes(router, paymentHandler)
 	routes.ClientPurchaseRoutes(router, purchaseHandler)
 	routes.AdminPurchaseRoutes(router, purchaseHandler)
+	routes.InvoiceRoutes(router, invoiceHandler)
+	routes.ReminderRoutes(router, reminderHandler)
+	routes.PaymentRoutes(router, paymentHandler)
+	routes.WhatsAppRoutes(router, whatsappHandler)
+	routes.AppNotificationRoutes(router, appNotificationHandler)
+
+	// Menjalankan scheduler reminder di background (H-30 s/d H-1 + overdue)
+	go reminderService.StartReminderScheduler(context.Background())
+
+	// Menjalankan watcher notifikasi invoice overdue untuk lonceng admin
+	go appNotificationService.StartOverdueWatcher(context.Background())
 
 	// Menjalankan server
 	server := &http.Server{
 		Addr:         ":8080",
 		Handler:      router,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		WriteTimeout: 120 * time.Second, // render PDF + upload WhatsApp bisa lama
 		IdleTimeout:  60 * time.Second,
 	}
 
@@ -105,6 +138,10 @@ func main() {
 	log.Println("API Testimonials: http://localhost:8080/api/testimonials")
 	log.Println("API FAQs: http://localhost:8080/api/faqs")
 	log.Println("API Auth: http://localhost:8080/api/auth/me")
+	log.Println("API Invoices: http://localhost:8080/api/invoices")
+	log.Println("API Reminders: http://localhost:8080/api/reminders")
+	log.Println("API Payments: http://localhost:8080/api/payments")
+	log.Println("API Notifications: http://localhost:8080/api/notifications")
 	log.Println("=================================")
 
 	err = server.ListenAndServe()

@@ -1,315 +1,139 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import Sidebar from "../../components/layout/Sidebar";
+import Header from "../../components/layout/Header";
+import { getSuperAdminDashboard } from "../../services/dashboardService";
 import {
   Users,
   ShieldCheck,
-  Globe,
   Wallet,
   FileText,
   AlertCircle,
   Bell,
   Clock,
-  ArrowUpRight,
-  ArrowDownRight,
   MoreHorizontal,
   CheckCircle2,
   CreditCard,
   Activity,
 } from "lucide-react";
 
-const stats = [
-  {
-    title: "Total Clients",
-    value: "128",
-    description: "+12% this month",
-    trend: "up",
-    icon: Users,
-  },
-  {
-    title: "Total Admins",
-    value: "8",
-    description: "+1 this month",
-    trend: "up",
-    icon: ShieldCheck,
-  },
-  {
-    title: "Active Hosting",
-    value: "245",
-    description: "+8.2% this month",
-    trend: "up",
-    icon: Globe,
-  },
-  {
-    title: "Revenue",
-    value: "Rp45.250.000",
-    description: "+8.5% this month",
-    trend: "up",
-    icon: Wallet,
-  },
-  {
-    title: "Unpaid Invoices",
-    value: "42",
-    description: "Rp8.500.000 outstanding",
-    trend: "down",
-    icon: FileText,
-  },
-  {
-    title: "Overdue Invoices",
-    value: "15",
-    description: "Rp5.250.000 overdue",
-    trend: "down",
-    icon: AlertCircle,
-  },
-  {
-    title: "Reminder Today",
-    value: "12",
-    description: "9 sent · 2 scheduled · 1 failed",
-    trend: null,
-    icon: Bell,
-  },
-  {
-    title: "Pending Payments",
-    value: "7",
-    description: "Waiting for verification",
-    trend: null,
-    icon: Clock,
-  },
+const formatRupiah = (value) =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+
+// Formatter singkat untuk sumbu Y chart: 1Rb / 1Jt / 1M.
+// Tooltip tetap memakai formatRupiah penuh.
+const formatAxisValue = (value) => {
+  const absValue = Math.abs(value || 0);
+  const trim = (num) => {
+    const fixed = num.toFixed(1);
+    return fixed.endsWith(".0") ? fixed.slice(0, -2) : fixed;
+  };
+
+  if (absValue >= 1_000_000_000) return `${trim(value / 1_000_000_000)}M`;
+  if (absValue >= 1_000_000) return `${trim(value / 1_000_000)}Jt`;
+  if (absValue >= 1_000) return `${trim(value / 1_000)}Rb`;
+  return String(Math.round(value));
+};
+
+// Filter periode revenue: key internal harus sama dengan key yang
+// dikirim backend (revenue_periods[].key), label hanya untuk UI.
+const REVENUE_PERIODS = [
+  { key: "7 Days", label: "7 Hari" },
+  { key: "1 Month", label: "1 Bulan" },
+  { key: "1 Year", label: "1 Tahun" },
 ];
 
-const revenuePeriods = [
-  {
-    key: "7 Days",
-    labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-    values: [25, 28, 31, 27, 33, 35, 30],
-  },
-  {
-    key: "30 Days",
-    labels: Array.from({ length: 30 }, (_, index) => `D${index + 1}`),
-    values: [
-      22, 26, 29, 32, 28, 31, 35, 33, 30, 34,
-      36, 38, 35, 32, 34, 37, 39, 41, 38, 36,
-      39, 42, 40, 37, 40, 43, 45, 42, 44, 46,
-    ],
-  },
-  {
-    key: "3 Months",
-    labels: Array.from({ length: 12 }, (_, index) => `W${index + 1}`),
-    values: [24, 27, 30, 33, 31, 35, 38, 36, 39, 42, 41, 45],
-  },
-  {
-    key: "6 Months",
-    labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-    values: [25, 28, 31, 29, 35, 38],
-  },
-  {
-    key: "1 Year",
-    labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
-    values: [25, 28, 31, 29, 35, 38, 41, 45, 42, 48, 51, 54],
-  },
-];
+const timeAgo = (iso) => {
+  if (!iso) return "-";
 
-const invoiceStatusData = [
-  { label: "Paid", count: 161, percent: 62, color: "#10b981" },
-  { label: "Unpaid", count: 52, percent: 20, color: "#f59e0b" },
-  { label: "Overdue", count: 34, percent: 13, color: "#ef4444" },
-  { label: "Cancelled", count: 13, percent: 5, color: "#94a3b8" },
-];
+  const diff = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diff / 60000);
 
-const upcomingInvoices = [
-  {
-    client: "PT ABC",
-    invoice: "INV-2026-001",
-    plan: "Business Hosting",
-    dueDate: "20 Aug 2026",
-    amount: "Rp500.000",
-    status: "UNPAID",
-    reminder: "H-7",
-  },
-  {
-    client: "PT XYZ",
-    invoice: "INV-2026-002",
-    plan: "Premium Hosting",
-    dueDate: "22 Aug 2026",
-    amount: "Rp1.000.000",
-    status: "UNPAID",
-    reminder: "H-10",
-  },
-  {
-    client: "PT Maju",
-    invoice: "INV-2026-003",
-    plan: "Basic Hosting",
-    dueDate: "23 Aug 2026",
-    amount: "Rp250.000",
-    status: "UNPAID",
-    reminder: "H-3",
-  },
-  {
-    client: "PT Example",
-    invoice: "INV-2026-004",
-    plan: "Business Hosting",
-    dueDate: "25 Aug 2026",
-    amount: "Rp500.000",
-    status: "UNPAID",
-    reminder: "H-10",
-  },
-];
+  if (minutes < 1) return "Baru saja";
+  if (minutes < 60) return `${minutes} menit lalu`;
 
-const overdueInvoices = [
-  {
-    client: "PT ABC",
-    invoice: "INV-2026-010",
-    dueDate: "10 Aug 2026",
-    days: "4 days",
-    amount: "Rp500.000",
-  },
-  {
-    client: "PT XYZ",
-    invoice: "INV-2026-011",
-    dueDate: "8 Aug 2026",
-    days: "6 days",
-    amount: "Rp1.000.000",
-  },
-  {
-    client: "PT Maju",
-    invoice: "INV-2026-012",
-    dueDate: "7 Aug 2026",
-    days: "7 days",
-    amount: "Rp750.000",
-  },
-];
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} jam lalu`;
 
-const recentPayments = [
-  {
-    client: "PT ABC",
-    invoice: "INV-001",
-    amount: "Rp500.000",
-    date: "Today",
-    method: "Bank Transfer",
-    status: "Approved",
-  },
-  {
-    client: "PT XYZ",
-    invoice: "INV-002",
-    amount: "Rp1.000.000",
-    date: "Today",
-    method: "Bank Transfer",
-    status: "Pending",
-  },
-  {
-    client: "PT Maju",
-    invoice: "INV-003",
-    amount: "Rp250.000",
-    date: "Yesterday",
-    method: "Bank Transfer",
-    status: "Approved",
-  },
-];
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "Kemarin";
+  if (days < 7) return `${days} hari lalu`;
 
-const activities = [
-  {
-    title: "Payment approved",
-    description: "PT ABC — INV-001",
-    time: "10 minutes ago",
-    icon: CheckCircle2,
-  },
-  {
-    title: "Reminder H-3 sent",
-    description: "PT XYZ — INV-002",
-    time: "25 minutes ago",
-    icon: Bell,
-  },
-  {
-    title: "New invoice created",
-    description: "INV-003 — PT Maju",
-    time: "1 hour ago",
-    icon: FileText,
-  },
-  {
-    title: "New client registered",
-    description: "PT Example",
-    time: "2 hours ago",
-    icon: Users,
-  },
-  {
-    title: "Hosting subscription created",
-    description: "PT ABC",
-    time: "3 hours ago",
-    icon: Globe,
-  },
-  {
-    title: "Admin created",
-    description: "John Doe",
-    time: "Yesterday",
-    icon: ShieldCheck,
-  },
-];
+  return new Date(iso).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+};
 
-const reminderData = [
-  {
-    client: "PT ABC",
-    invoice: "INV-001",
-    reminder: "H-7",
-    status: "Sent",
-  },
-  {
-    client: "PT XYZ",
-    invoice: "INV-002",
-    reminder: "H-3",
-    status: "Scheduled",
-  },
-  {
-    client: "PT Maju",
-    invoice: "INV-003",
-    reminder: "H-1",
-    status: "Failed",
-  },
-];
+// Warna donut mengikuti aturan warna status yang sama dengan badge.
+const STATUS_COLORS = {
+  PAID: "#10b981",
+  APPROVED: "#10b981",
+  SENT: "#3b82f6",
+  SCHEDULED: "#3b82f6",
+  UNPAID: "#f59e0b",
+  PENDING: "#f59e0b",
+  READY: "#6366f1",
+  OVERDUE: "#ef4444",
+  FAILED: "#ef4444",
+  REJECTED: "#ef4444",
+  CANCELLED: "#94a3b8",
+  SKIPPED: "#94a3b8",
+};
 
-const paymentVerification = [
-  {
-    client: "PT ABC",
-    invoice: "INV-001",
-    amount: "Rp500.000",
-    date: "Today",
-  },
-  {
-    client: "PT XYZ",
-    invoice: "INV-002",
-    amount: "Rp1.000.000",
-    date: "Today",
-  },
-  {
-    client: "PT Maju",
-    invoice: "INV-003",
-    amount: "Rp250.000",
-    date: "Yesterday",
-  },
-];
+// Label UI untuk status internal uppercase dari database/backend.
+const STATUS_LABELS = {
+  PAID: "Paid",
+  UNPAID: "Unpaid",
+  SENT: "Sent",
+  OVERDUE: "Overdue",
+  CANCELLED: "Cancelled",
+  DRAFT: "Draft",
+  APPROVED: "Approved",
+  PENDING: "Pending",
+  REJECTED: "Rejected",
+  SCHEDULED: "Scheduled",
+  READY: "Ready",
+  FAILED: "Failed",
+  SKIPPED: "Skipped",
+};
 
 function StatusBadge({ status }) {
+  const normalized = String(status || "").toUpperCase();
+
   const styles = {
     PAID: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    APPROVED: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    SENT: "bg-blue-50 text-blue-700 border-blue-200",
+    SCHEDULED: "bg-blue-50 text-blue-700 border-blue-200",
     UNPAID: "bg-amber-50 text-amber-700 border-amber-200",
+    PENDING: "bg-amber-50 text-amber-700 border-amber-200",
+    READY: "bg-indigo-50 text-indigo-700 border-indigo-200",
     OVERDUE: "bg-red-50 text-red-700 border-red-200",
+    FAILED: "bg-red-50 text-red-700 border-red-200",
+    REJECTED: "bg-red-50 text-red-700 border-red-200",
     CANCELLED: "bg-slate-100 text-slate-600 border-slate-200",
-    Approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    Pending: "bg-amber-50 text-amber-700 border-amber-200",
-    Sent: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    Scheduled: "bg-blue-50 text-blue-700 border-blue-200",
-    Failed: "bg-red-50 text-red-700 border-red-200",
+    SKIPPED: "bg-slate-100 text-slate-600 border-slate-200",
+    DRAFT: "bg-slate-100 text-slate-600 border-slate-200",
   };
 
   return (
     <span
       className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${
-        styles[status] || "bg-slate-100 text-slate-600 border-slate-200"
+        styles[normalized] || "bg-slate-100 text-slate-600 border-slate-200"
       }`}
     >
-      {status}
+      {STATUS_LABELS[normalized] || normalized}
     </span>
   );
 }
 
-function SectionHeader({ title, description, action }) {
+function SectionHeader({ title, description, action, onAction }) {
   return (
     <div className="mb-5 flex items-center justify-between gap-4">
       <div>
@@ -321,7 +145,11 @@ function SectionHeader({ title, description, action }) {
       </div>
 
       {action && (
-        <button className="text-sm font-medium text-indigo-600 hover:text-indigo-700">
+        <button
+          type="button"
+          onClick={onAction}
+          className="text-sm font-medium text-indigo-600 hover:text-indigo-700"
+        >
           {action}
         </button>
       )}
@@ -334,18 +162,24 @@ function RevenueChart({ data }) {
 
   const width = 800;
   const height = 260;
-  const padLeft = 36;
+  const padLeft = 44;
   const padRight = 12;
   const padTop = 24;
   const padBottom = 30;
 
-  const maxValue = Math.max(...data.values);
+  const values = data.values.length > 0 ? data.values : [0];
+  const labels =
+    data.labels.length === values.length
+      ? data.labels
+      : values.map((_, index) => index + 1);
+
+  const maxValue = Math.max(...values);
   const niceMax = Math.max(10, Math.ceil((maxValue * 1.15) / 10) * 10);
-  const n = data.values.length;
+  const n = values.length;
   const innerW = width - padLeft - padRight;
   const innerH = height - padTop - padBottom;
 
-  const points = data.values.map((value, index) => {
+  const points = values.map((value, index) => {
     const x = n === 1 ? padLeft + innerW / 2 : padLeft + (index * innerW) / (n - 1);
     const y = padTop + innerH - (value / niceMax) * innerH;
 
@@ -427,7 +261,7 @@ function RevenueChart({ data }) {
               fontSize="11"
               fill="#94a3b8"
             >
-              {line.value}
+              {formatAxisValue(line.value)}
             </text>
           </g>
         ))}
@@ -462,7 +296,7 @@ function RevenueChart({ data }) {
                 fontSize="11"
                 fill="#64748b"
               >
-                {data.labels[index]}
+                {labels[index]}
               </text>
             </g>
           ) : null
@@ -514,11 +348,11 @@ function RevenueChart({ data }) {
           }}
         >
           <p className="text-[10px] font-medium text-slate-400">
-            {data.labels[hoverIndex]}
+            {labels[hoverIndex]}
           </p>
 
           <p className="text-xs font-bold text-white">
-            Rp {hoveredPoint.value} Jt
+            {formatRupiah(hoveredPoint.value)}
           </p>
         </div>
       )}
@@ -556,7 +390,7 @@ function donutSegment(cx, cy, rOuter, rInner, start, end) {
   ].join(" ");
 }
 
-function DonutChart({ hoveredIndex, onHover, onLeave }) {
+function DonutChart({ data, hoveredIndex, onHover, onLeave }) {
   const size = 176;
   const cx = size / 2;
   const cy = size / 2;
@@ -564,7 +398,9 @@ function DonutChart({ hoveredIndex, onHover, onLeave }) {
   const rInner = 54;
   const gap = 2;
 
-  const segments = invoiceStatusData.reduce((acc, segment) => {
+  const total = data.reduce((sum, segment) => sum + segment.count, 0);
+
+  const segments = data.reduce((acc, segment) => {
     const start =
       acc.length === 0
         ? -90
@@ -593,9 +429,15 @@ function DonutChart({ hoveredIndex, onHover, onLeave }) {
             d={donutSegment(cx, cy, rOuter, rInner, segment.start, segment.end)}
             fill={segment.color}
             stroke="#ffffff"
-            strokeWidth={hoveredIndex === index ? 2.5 : 1}
-            opacity={hoveredIndex === null || hoveredIndex === index ? 1 : 0.35}
+            strokeWidth={hoveredIndex === index ? 3 : 1}
+            opacity={hoveredIndex === null || hoveredIndex === index ? 1 : 0.25}
             className="cursor-pointer transition-opacity duration-150"
+            style={{
+              transformOrigin: `${cx}px ${cy}px`,
+              transform:
+                hoveredIndex === index ? "scale(1.06)" : "scale(1)",
+              transition: "transform 150ms ease, opacity 150ms ease",
+            }}
             onMouseEnter={() => onHover(index)}
           />
         ))}
@@ -605,7 +447,7 @@ function DonutChart({ hoveredIndex, onHover, onLeave }) {
         <div className="flex h-28 w-28 items-center justify-center rounded-full bg-white text-center shadow-sm">
           <div>
             <p className="text-2xl font-bold text-slate-900">
-              {hovered ? hovered.count : 260}
+              {hovered ? hovered.count : total}
             </p>
 
             <p className="text-xs text-slate-500">
@@ -618,8 +460,17 @@ function DonutChart({ hoveredIndex, onHover, onLeave }) {
   );
 }
 
-function InvoiceStatusCard() {
+function InvoiceStatusCard({ invoiceStatus }) {
   const [hoveredIndex, setHoveredIndex] = useState(null);
+
+  const total = invoiceStatus.reduce((sum, item) => sum + item.count, 0);
+
+  const donutData = invoiceStatus.map((item) => ({
+    label: item.status,
+    count: item.count,
+    percent: total > 0 ? Math.round((item.count / total) * 100) : 0,
+    color: STATUS_COLORS[item.status] || "#94a3b8",
+  }));
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -628,141 +479,260 @@ function InvoiceStatusCard() {
         description="Current invoice distribution"
       />
 
-      <div className="flex flex-col items-center gap-6 sm:flex-row">
-        <DonutChart
-          hoveredIndex={hoveredIndex}
-          onHover={setHoveredIndex}
-          onLeave={() => setHoveredIndex(null)}
-        />
+      {donutData.length === 0 ? (
+        <p className="py-10 text-center text-sm text-slate-400">
+          Belum ada data invoice.
+        </p>
+      ) : (
+        <div className="flex flex-col items-center gap-6 sm:flex-row">
+          <DonutChart
+            data={donutData}
+            hoveredIndex={hoveredIndex}
+            onHover={setHoveredIndex}
+            onLeave={() => setHoveredIndex(null)}
+          />
 
-        <div className="w-full space-y-2">
-          {invoiceStatusData.map((status, index) => (
-            <div
-              key={status.label}
-              onMouseEnter={() => setHoveredIndex(index)}
-              onMouseLeave={() => setHoveredIndex(null)}
-              className={`flex items-center justify-between rounded-lg px-2 py-1.5 transition ${
-                hoveredIndex === index ? "bg-slate-50" : ""
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: status.color }}
-                />
+          <div className="w-full space-y-2">
+            {donutData.map((status, index) => (
+              <div
+                key={status.label}
+                onMouseEnter={() => setHoveredIndex(index)}
+                onMouseLeave={() => setHoveredIndex(null)}
+                className={`flex cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 transition ${
+                  hoveredIndex === index
+                    ? "bg-slate-100 ring-1 ring-slate-200"
+                    : ""
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full transition-transform duration-150 ${
+                      hoveredIndex === index ? "scale-150" : "scale-100"
+                    }`}
+                    style={{ backgroundColor: status.color }}
+                  />
 
-                <span className="text-sm text-slate-600">{status.label}</span>
-              </div>
+                  <span
+                    className={`text-sm transition-colors ${
+                      hoveredIndex === index
+                        ? "font-semibold text-slate-900"
+                        : "text-slate-600"
+                    }`}
+                  >
+                    {status.label}
+                  </span>
+                </div>
 
-              <span className="text-sm font-semibold text-slate-900">
-                {status.count}
-                <span className="ml-1 text-xs font-medium text-slate-500">
-                  ({status.percent}%)
-                </span>
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function HostingSubscriptionCard() {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <SectionHeader
-        title="Hosting Subscription"
-        description="Current hosting subscription overview"
-      />
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-xl bg-emerald-50 p-4">
-          <p className="text-xs font-medium text-emerald-700">Active</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-800">245</p>
-        </div>
-
-        <div className="rounded-xl bg-amber-50 p-4">
-          <p className="text-xs font-medium text-amber-700">
-            Expiring Soon
-          </p>
-          <p className="mt-1 text-2xl font-bold text-amber-800">18</p>
-        </div>
-
-        <div className="rounded-xl bg-red-50 p-4">
-          <p className="text-xs font-medium text-red-700">Expired</p>
-          <p className="mt-1 text-2xl font-bold text-red-800">7</p>
-        </div>
-
-        <div className="rounded-xl bg-slate-100 p-4">
-          <p className="text-xs font-medium text-slate-600">Suspended</p>
-          <p className="mt-1 text-2xl font-bold text-slate-800">3</p>
-        </div>
-      </div>
-
-      <div className="mt-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-900">
-            Hosting Plans
-          </h3>
-          <button className="text-xs font-medium text-indigo-600">
-            View All
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          {[
-            ["Basic", 120, "49%"],
-            ["Business", 85, "35%"],
-            ["Premium", 40, "16%"],
-          ].map(([name, count, percentage]) => (
-            <div key={name}>
-              <div className="mb-2 flex items-center justify-between text-sm">
-                <span className="text-slate-600">{name}</span>
-                <span className="font-medium text-slate-900">
-                  {count} ({percentage})
+                <span className="text-sm font-semibold text-slate-900">
+                  {status.count}
+                  <span className="ml-1 text-xs font-medium text-slate-500">
+                    ({status.percent}%)
+                  </span>
                 </span>
               </div>
-
-              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className="h-full rounded-full bg-indigo-500"
-                  style={{ width: percentage }}
-                />
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
 export default function SuperAdminDashboard() {
-  const [activePeriod, setActivePeriod] = useState("1 Year");
-  const activeRevenue =
-    revenuePeriods.find((period) => period.key === activePeriod) ||
-    revenuePeriods[0];
+  const navigate = useNavigate();
+  const [activePeriod, setActivePeriod] = useState("7 Days");
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchData() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const result = await getSuperAdminDashboard();
+
+        if (!cancelled) {
+          setData(result);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || "Gagal memuat data dashboard");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    fetchData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Tidak ada fallback diam-diam: jika backend tidak mengirim data untuk
+  // periode yang dipilih, tampilkan empty state (bukan periode lain).
+  const activeRevenue = useMemo(() => {
+    if (!data?.revenue_periods?.length) {
+      return null;
+    }
+
+    return (
+      data.revenue_periods.find((period) => period.key === activePeriod) ||
+      null
+    );
+  }, [data, activePeriod]);
+
+  const scheduledRemindersList = useMemo(() => {
+    if (!data?.upcoming_invoices) return [];
+
+    return data.upcoming_invoices.filter(
+      (invoice) => invoice.reminder && invoice.reminder !== "-"
+    );
+  }, [data]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 md:pl-[280px]">
+        <Sidebar />
+        <Header role="superadmin" />
+
+        <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <div className="text-center">
+              <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
+
+              <p className="mt-4 text-sm font-medium text-slate-500">
+                Memuat dashboard superadmin...
+              </p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 md:pl-[280px]">
+        <Sidebar />
+        <Header role="superadmin" />
+
+        <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <div className="rounded-2xl border border-red-100 bg-red-50 p-8 text-center">
+              <AlertCircle size={32} className="mx-auto text-red-500" />
+
+              <p className="mt-3 font-semibold text-red-700">
+                Gagal memuat dashboard
+              </p>
+
+              <p className="mt-1 text-sm text-red-600">{error}</p>
+
+              <p className="mt-3 text-xs text-red-500">
+                Pastikan backend berjalan di http://localhost:8080
+              </p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  const { stats, reminders_today } = data;
+
+  const statCards = [
+    {
+      title: "Total Clients",
+      value: String(stats.total_clients ?? 0),
+      description: "Terdaftar keseluruhan",
+      icon: Users,
+    },
+    {
+      title: "Total Admins",
+      value: String(stats.total_admins ?? 0),
+      description: "Admin terdaftar",
+      icon: ShieldCheck,
+    },
+    {
+      // total_revenue = total nilai invoice aktif (PAID+UNPAID+OVERDUE+SENT),
+      // bukan akumulasi payment APPROVED, jadi labelnya Total Invoiced.
+      title: "Total Invoiced",
+      value: formatRupiah(stats.total_revenue),
+      description: `Terbayar ${formatRupiah(stats.paid_revenue)}`,
+      icon: Wallet,
+    },
+    {
+      title: "Paid Invoices",
+      value: String(stats.paid_invoices ?? 0),
+      description: `${stats.cancelled_invoices ?? 0} invoice dibatalkan`,
+      icon: CheckCircle2,
+    },
+    {
+      title: "Unpaid Invoices",
+      value: String(stats.unpaid_invoices ?? 0),
+      description: `${formatRupiah(stats.outstanding_amount)} outstanding`,
+      icon: FileText,
+    },
+    {
+      title: "Overdue Invoices",
+      value: String(stats.overdue_invoices ?? 0),
+      description: `${formatRupiah(stats.overdue_amount)} tertunggak`,
+      icon: AlertCircle,
+    },
+    {
+      // reminders_today = seluruh reminder dengan jadwal (scheduled_at) hari ini,
+      // mencakup yang masih PENDING, sudah SENT, dan FAILED.
+      title: "Reminder Activity",
+      value: String(
+        (reminders_today.scheduled ?? 0) +
+          (reminders_today.sent ?? 0) +
+          (reminders_today.failed ?? 0)
+      ),
+      description: `${reminders_today.sent ?? 0} sent · ${
+        reminders_today.scheduled ?? 0
+      } scheduled · ${reminders_today.failed ?? 0} failed today`,
+      icon: Bell,
+    },
+    {
+      title: "Pending Payments",
+      value: String(stats.pending_payments ?? 0),
+      description: "Waiting for verification",
+      icon: Clock,
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 md:pl-[280px]">
+      <Sidebar />
+      <Header role="superadmin" />
+
       {/* Main Content */}
       <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
         {/* Header */}
-        <div className="mb-8">
+        <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#3525cd] to-[#5b44f3] p-6 text-white shadow-lg">
+          <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
+          <div className="absolute -bottom-8 right-20 h-28 w-28 rounded-full bg-white/10" />
+          <div className="absolute right-40 -top-6 h-20 w-20 rounded-full bg-white/10" />
 
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            Dashboard
-          </h1>
-
-          <p className="mt-1 text-sm text-slate-500">
-            Overview of your hosting business and billing activity.
-          </p>
+          <div className="relative">
+            <p className="text-sm font-medium text-white/80">Super Admin Panel</p>
+            <h1 className="mt-1 text-2xl font-bold">Dashboard</h1>
+            <p className="mt-1 text-sm text-white/80">
+              Overview of your hosting business and billing activity.
+            </p>
+          </div>
         </div>
 
         {/* Statistics */}
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {stats.map((stat) => {
+          {statCards.map((stat) => {
             const Icon = stat.icon;
 
             return (
@@ -788,25 +758,9 @@ export default function SuperAdminDashboard() {
                   {stat.value}
                 </p>
 
-                <div className="mt-2 flex items-center gap-1.5 text-xs">
-                  {stat.trend === "up" && (
-                    <ArrowUpRight
-                      size={14}
-                      className="text-emerald-600"
-                    />
-                  )}
-
-                  {stat.trend === "down" && (
-                    <ArrowDownRight
-                      size={14}
-                      className="text-amber-600"
-                    />
-                  )}
-
-                  <span className="text-slate-500">
-                    {stat.description}
-                  </span>
-                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  {stat.description}
+                </p>
               </div>
             );
           })}
@@ -821,7 +775,7 @@ export default function SuperAdminDashboard() {
             />
 
             <div className="flex flex-wrap gap-2">
-              {revenuePeriods.map((period) => (
+              {REVENUE_PERIODS.map((period) => (
                 <button
                   key={period.key}
                   type="button"
@@ -832,7 +786,7 @@ export default function SuperAdminDashboard() {
                       : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                   }`}
                 >
-                  {period.key}
+                  {period.label}
                 </button>
               ))}
             </div>
@@ -840,41 +794,48 @@ export default function SuperAdminDashboard() {
 
           <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
             <div>
-              <p className="text-xs text-slate-500">Total Revenue</p>
+              <p className="text-xs text-slate-500">Total Invoiced</p>
               <p className="mt-1 text-lg font-bold text-slate-900">
-                Rp45.250.000
+                {formatRupiah(stats.total_revenue)}
               </p>
             </div>
 
             <div>
               <p className="text-xs text-slate-500">Paid Revenue</p>
               <p className="mt-1 text-lg font-bold text-emerald-600">
-                Rp39.000.000
+                {formatRupiah(stats.paid_revenue)}
               </p>
             </div>
 
             <div>
               <p className="text-xs text-slate-500">Outstanding</p>
               <p className="mt-1 text-lg font-bold text-amber-600">
-                Rp8.500.000
+                {formatRupiah(stats.outstanding_amount)}
               </p>
             </div>
 
             <div>
               <p className="text-xs text-slate-500">Overdue</p>
               <p className="mt-1 text-lg font-bold text-red-600">
-                Rp5.250.000
+                {formatRupiah(stats.overdue_amount)}
               </p>
             </div>
           </div>
 
-          <RevenueChart data={activeRevenue} />
+          {activeRevenue && activeRevenue.labels.length > 0 ? (
+            <RevenueChart data={activeRevenue} />
+          ) : (
+            <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-dashed border-slate-200">
+              <p className="text-sm text-slate-400">
+                Data revenue untuk periode ini belum tersedia.
+              </p>
+            </div>
+          )}
         </div>
 
-        {/* Invoice + Hosting */}
-        <div className="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <InvoiceStatusCard />
-          <HostingSubscriptionCard />
+        {/* Invoice Status */}
+        <div className="mb-6 grid grid-cols-1 gap-6">
+          <InvoiceStatusCard invoiceStatus={data.invoice_status} />
         </div>
 
         {/* Upcoming Due Dates */}
@@ -884,6 +845,7 @@ export default function SuperAdminDashboard() {
               title="Upcoming Due Dates"
               description="Invoices approaching their payment deadline."
               action="View All"
+              onAction={() => navigate("/superadmin/invoices")}
             />
           </div>
 
@@ -912,48 +874,63 @@ export default function SuperAdminDashboard() {
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                {upcomingInvoices.map((invoice) => (
-                  <tr
-                    key={invoice.invoice}
-                    className="hover:bg-slate-50"
-                  >
-                    <td className="px-6 py-4 font-medium text-slate-900">
-                      {invoice.client}
-                    </td>
-
-                    <td className="px-6 py-4 text-slate-600">
-                      {invoice.invoice}
-                    </td>
-
-                    <td className="px-6 py-4 text-slate-600">
-                      {invoice.plan}
-                    </td>
-
-                    <td className="px-6 py-4 text-slate-600">
-                      {invoice.dueDate}
-                    </td>
-
-                    <td className="px-6 py-4 font-medium text-slate-900">
-                      {invoice.amount}
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <StatusBadge status={invoice.status} />
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
-                        {invoice.reminder}
-                      </span>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <button className="font-medium text-indigo-600 hover:text-indigo-700">
-                        View
-                      </button>
+                {data.upcoming_invoices.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="px-6 py-8 text-center text-sm text-slate-400"
+                    >
+                      Belum ada invoice mendatang jatuh tempo.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  data.upcoming_invoices.map((invoice) => (
+                    <tr
+                      key={invoice.invoice_number}
+                      className="hover:bg-slate-50"
+                    >
+                      <td className="px-6 py-4 font-medium text-slate-900">
+                        {invoice.client}
+                      </td>
+
+                      <td className="px-6 py-4 text-slate-600">
+                        {invoice.invoice_number}
+                      </td>
+
+                      <td className="px-6 py-4 text-slate-600">
+                        {invoice.plan}
+                      </td>
+
+                      <td className="px-6 py-4 text-slate-600">
+                        {invoice.due_date}
+                      </td>
+
+                      <td className="px-6 py-4 font-medium text-slate-900">
+                        {formatRupiah(invoice.amount)}
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <StatusBadge status={invoice.status} />
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+                          {invoice.reminder}
+                        </span>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <button
+                          type="button"
+                          onClick={() => navigate("/superadmin/invoices")}
+                          className="font-medium text-indigo-600 hover:text-indigo-700"
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -967,49 +944,60 @@ export default function SuperAdminDashboard() {
               title="Reminder Status"
               description="Automatic reminder activity"
               action="View History"
+              onAction={() => navigate("/superadmin/reminders")}
             />
 
-            <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="mb-6 grid grid-cols-3 gap-3">
               <div className="rounded-xl bg-blue-50 p-4">
                 <p className="text-xs text-blue-600">Scheduled</p>
-                <p className="mt-1 text-xl font-bold text-blue-800">12</p>
+                <p className="mt-1 text-xl font-bold text-blue-800">
+                  {reminders_today.scheduled ?? 0}
+                </p>
               </div>
 
               <div className="rounded-xl bg-emerald-50 p-4">
                 <p className="text-xs text-emerald-600">Sent</p>
-                <p className="mt-1 text-xl font-bold text-emerald-800">35</p>
+                <p className="mt-1 text-xl font-bold text-emerald-800">
+                  {reminders_today.sent ?? 0}
+                </p>
               </div>
 
               <div className="rounded-xl bg-red-50 p-4">
                 <p className="text-xs text-red-600">Failed</p>
-                <p className="mt-1 text-xl font-bold text-red-800">2</p>
-              </div>
-
-              <div className="rounded-xl bg-slate-100 p-4">
-                <p className="text-xs text-slate-600">Cancelled</p>
-                <p className="mt-1 text-xl font-bold text-slate-800">8</p>
+                <p className="mt-1 text-xl font-bold text-red-800">
+                  {reminders_today.failed ?? 0}
+                </p>
               </div>
             </div>
 
             <div className="space-y-3">
-              {reminderData.map((item) => (
-                <div
-                  key={`${item.invoice}-${item.reminder}`}
-                  className="flex items-center justify-between rounded-xl border border-slate-100 p-3"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">
-                      {item.client}
-                    </p>
+              {scheduledRemindersList.length === 0 ? (
+                <p className="py-4 text-center text-sm text-slate-400">
+                  Tidak ada reminder terjadwal berikutnya.
+                </p>
+              ) : (
+                scheduledRemindersList.map((item) => (
+                  <div
+                    key={`${item.invoice_number}-${item.reminder}`}
+                    className="flex items-center justify-between rounded-xl border border-slate-100 p-3"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {item.client}
+                      </p>
 
-                    <p className="text-xs text-slate-500">
-                      {item.invoice} · {item.reminder}
-                    </p>
+                      <p className="text-xs text-slate-500">
+                        {item.invoice_number} · {item.reminder}
+                      </p>
+                    </div>
+
+                    {/* Status dari backend (PENDING = menunggu jadwal kirim) */}
+                    <StatusBadge
+                      status={item.reminder_status || "PENDING"}
+                    />
                   </div>
-
-                  <StatusBadge status={item.status} />
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -1019,6 +1007,7 @@ export default function SuperAdminDashboard() {
               title="Payment Verification"
               description="Payments waiting for verification"
               action="Review Payments"
+              onAction={() => navigate("/superadmin/payments")}
             />
 
             <div className="mb-5 rounded-xl bg-amber-50 p-4">
@@ -1029,7 +1018,8 @@ export default function SuperAdminDashboard() {
 
                 <div>
                   <p className="text-sm font-semibold text-amber-900">
-                    7 payments waiting for verification
+                    {stats.pending_payments ?? 0} payments waiting for
+                    verification
                   </p>
 
                   <p className="mt-0.5 text-xs text-amber-700">
@@ -1040,32 +1030,36 @@ export default function SuperAdminDashboard() {
             </div>
 
             <div className="space-y-3">
-              {paymentVerification.map((payment) => (
-                <div
-                  key={payment.invoice}
-                  className="flex items-center justify-between gap-4 rounded-xl border border-slate-100 p-3"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">
-                      {payment.client}
-                    </p>
+              {data.pending_verifications.length === 0 ? (
+                <p className="py-4 text-center text-sm text-slate-400">
+                  Tidak ada pembayaran menunggu verifikasi.
+                </p>
+              ) : (
+                data.pending_verifications.map((payment) => (
+                  <div
+                    key={payment.id}
+                    className="flex items-center justify-between gap-4 rounded-xl border border-slate-100 p-3"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {payment.client}
+                      </p>
 
-                    <p className="text-xs text-slate-500">
-                      {payment.invoice} · {payment.date}
-                    </p>
+                      <p className="text-xs text-slate-500">
+                        {payment.invoice_number} · {payment.date}
+                      </p>
+                    </div>
+
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {formatRupiah(payment.amount)}
+                        </p>
+
+                        <StatusBadge status="PENDING" />
+                      </div>
                   </div>
-
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {payment.amount}
-                    </p>
-
-                    <span className="text-xs text-amber-600">
-                      Pending
-                    </span>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -1083,11 +1077,16 @@ export default function SuperAdminDashboard() {
               </div>
 
               <p className="mt-1 text-sm text-slate-500">
-                15 overdue invoices · Rp5.250.000 total outstanding
+                {stats.overdue_invoices ?? 0} overdue invoices ·{" "}
+                {formatRupiah(stats.overdue_amount)} total outstanding
               </p>
             </div>
 
-            <button className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-100">
+            <button
+              type="button"
+              onClick={() => navigate("/superadmin/invoices")}
+              className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-100"
+            >
               View All
             </button>
           </div>
@@ -1115,40 +1114,55 @@ export default function SuperAdminDashboard() {
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                {overdueInvoices.map((invoice) => (
-                  <tr
-                    key={invoice.invoice}
-                    className="hover:bg-red-50/30"
-                  >
-                    <td className="px-6 py-4 font-medium text-slate-900">
-                      {invoice.client}
-                    </td>
-
-                    <td className="px-6 py-4 text-slate-600">
-                      {invoice.invoice}
-                    </td>
-
-                    <td className="px-6 py-4 text-slate-600">
-                      {invoice.dueDate}
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <span className="font-semibold text-red-600">
-                        {invoice.days}
-                      </span>
-                    </td>
-
-                    <td className="px-6 py-4 font-medium text-slate-900">
-                      {invoice.amount}
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <button className="font-medium text-indigo-600 hover:text-indigo-700">
-                        View
-                      </button>
+                {data.overdue_invoices.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-6 py-8 text-center text-sm text-slate-400"
+                    >
+                      Tidak ada invoice overdue. Kerja bagus!
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  data.overdue_invoices.map((invoice) => (
+                    <tr
+                      key={invoice.invoice_number}
+                      className="hover:bg-red-50/30"
+                    >
+                      <td className="px-6 py-4 font-medium text-slate-900">
+                        {invoice.client}
+                      </td>
+
+                      <td className="px-6 py-4 text-slate-600">
+                        {invoice.invoice_number}
+                      </td>
+
+                      <td className="px-6 py-4 text-slate-600">
+                        {invoice.due_date}
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <span className="font-semibold text-red-600">
+                          {invoice.days_overdue} days
+                        </span>
+                      </td>
+
+                      <td className="px-6 py-4 font-medium text-slate-900">
+                        {formatRupiah(invoice.amount)}
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <button
+                          type="button"
+                          onClick={() => navigate("/superadmin/invoices")}
+                          className="font-medium text-indigo-600 hover:text-indigo-700"
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -1164,38 +1178,48 @@ export default function SuperAdminDashboard() {
             />
 
             <div className="space-y-4">
-              {recentPayments.map((payment) => (
-                <div
-                  key={payment.invoice}
-                  className="flex items-center justify-between gap-4 border-b border-slate-100 pb-4 last:border-0 last:pb-0"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-xl bg-indigo-50 p-2.5 text-indigo-600">
-                      <CreditCard size={18} />
+              {data.recent_payments.length === 0 ? (
+                <p className="py-4 text-center text-sm text-slate-400">
+                  Belum ada pembayaran tercatat.
+                </p>
+              ) : (
+                data.recent_payments.map((payment) => (
+                  <div
+                    key={payment.id}
+                    className="flex items-center justify-between gap-4 border-b border-slate-100 pb-4 last:border-0 last:pb-0"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-xl bg-indigo-50 p-2.5 text-indigo-600">
+                        <CreditCard size={18} />
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {payment.client}
+                        </p>
+
+                        <p className="text-xs text-slate-500">
+                          {payment.invoice_number} · {payment.method}
+                        </p>
+                      </div>
                     </div>
 
-                    <div>
+                    <div className="text-right">
                       <p className="text-sm font-semibold text-slate-900">
-                        {payment.client}
+                        {formatRupiah(payment.amount)}
                       </p>
 
-                      <p className="text-xs text-slate-500">
-                        {payment.invoice} · {payment.method}
-                      </p>
+                      <div className="mt-1 flex items-center justify-end gap-2">
+                        <StatusBadge status={payment.status} />
+
+                        <p className="text-xs text-slate-500">
+                          {payment.date}
+                        </p>
+                      </div>
                     </div>
                   </div>
-
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {payment.amount}
-                    </p>
-
-                    <p className="mt-1 text-xs text-slate-500">
-                      {payment.date}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -1205,32 +1229,50 @@ export default function SuperAdminDashboard() {
               title="Recent Activity"
               description="Latest system activities"
               action="View All"
+              onAction={() => navigate("/superadmin/reports")}
             />
 
             <div className="relative ml-2 space-y-6 border-l border-slate-200 pl-6">
-              {activities.map((activity) => {
-                const Icon = activity.icon;
+              {data.recent_activities.length === 0 ? (
+                <p className="py-4 text-center text-sm text-slate-400">
+                  Belum ada aktivitas tercatat.
+                </p>
+              ) : (
+                data.recent_activities.map((activity) => {
+                  const action = (activity.action || "").toLowerCase();
+                  const Icon = action.includes("reminder")
+                    ? Bell
+                    : action.includes("payment") ||
+                        action.includes("approve") ||
+                        action.includes("verify")
+                      ? CheckCircle2
+                      : action.includes("invoice")
+                        ? FileText
+                        : action.includes("client")
+                          ? Users
+                          : Activity;
 
-                return (
-                  <div key={activity.title} className="relative">
-                    <div className="absolute -left-[39px] flex h-7 w-7 items-center justify-center rounded-full border-4 border-white bg-indigo-50 text-indigo-600">
-                      <Icon size={13} />
+                  return (
+                    <div key={activity.id} className="relative">
+                      <div className="absolute -left-[39px] flex h-7 w-7 items-center justify-center rounded-full border-4 border-white bg-indigo-50 text-indigo-600">
+                        <Icon size={13} />
+                      </div>
+
+                      <p className="text-sm font-semibold text-slate-900">
+                        {activity.action}
+                      </p>
+
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {activity.description}
+                      </p>
+
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        {timeAgo(activity.created_at)}
+                      </p>
                     </div>
-
-                    <p className="text-sm font-semibold text-slate-900">
-                      {activity.title}
-                    </p>
-
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {activity.description}
-                    </p>
-
-                    <p className="mt-1 text-[11px] text-slate-400">
-                      {activity.time}
-                    </p>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
@@ -1249,22 +1291,23 @@ export default function SuperAdminDashboard() {
                 </p>
 
                 <p className="text-xs text-slate-500">
-                  Reminder system operating normally.
+                  Data dashboard berhasil dimuat dari backend.
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap gap-2 text-xs">
+              {/* Backend merespon dengan sukses saat halaman dimuat */}
               <span className="rounded-full bg-emerald-50 px-3 py-1.5 font-medium text-emerald-700">
-                ● Reminder System Online
+                ● Backend Connected
               </span>
 
               <span className="rounded-full bg-red-50 px-3 py-1.5 font-medium text-red-700">
-                2 Failed Reminders
+                {reminders_today.failed ?? 0} Failed Reminders Today
               </span>
 
               <span className="rounded-full bg-amber-50 px-3 py-1.5 font-medium text-amber-700">
-                7 Pending Payments
+                {stats.pending_payments ?? 0} Pending Payments
               </span>
             </div>
           </div>
