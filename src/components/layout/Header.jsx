@@ -54,6 +54,13 @@ const Header = ({ role = "admin" }) => {
   const navigate = useNavigate();
   const { user, accessToken, signOut } = useAuth();
 
+  const profilePathByRole = {
+    ADMIN: "/admin/profile",
+    CLIENT: "/client/profile",
+  };
+
+  const profilePath = profilePathByRole[user?.role];
+
   const loadNotifications = useCallback(async () => {
     try {
       const result = await getNotifications(15, accessToken);
@@ -275,20 +282,24 @@ const Header = ({ role = "admin" }) => {
 
             {showProfile && (
               <div className="absolute right-0 top-12 w-52 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/10">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowProfile(false);
-                    navigate("/client/profile");
-                  }}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-brand-50 hover:text-brand-600"
-                >
-                  <User size={18} />
+                {profilePath && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowProfile(false);
+                        navigate(profilePath);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-brand-50 hover:text-brand-600"
+                    >
+                      <User size={18} />
 
-                  Profile
-                </button>
+                      Profile
+                    </button>
 
-                <div className="my-1 border-t border-slate-100" />
+                    <div className="my-1 border-t border-slate-100" />
+                  </>
+                )}
 
                 <button
                   type="button"
