@@ -5,6 +5,10 @@ import { getClientByProfileId } from "../services/clientApi";
 
 const AuthContext = createContext(null);
 
+// Khusus development: kunci localStorage untuk masuk tanpa login.
+// Tidak berpengaruh pada build production (import.meta.env.DEV === false).
+export const DEV_BYPASS_ROLE_KEY = "dev_bypass_role";
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [client, setClient] = useState(null);
@@ -15,6 +19,23 @@ export function AuthProvider({ children }) {
     const init = async () => {
       const { data } = await supabase.auth.getSession();
       const session = data.session;
+
+      // Bypass login khusus development (? /dev/admin, /dev/superadmin, /dev/client)
+      if (import.meta.env.DEV) {
+        const devRole = localStorage.getItem(DEV_BYPASS_ROLE_KEY);
+        if (devRole && ["CLIENT", "ADMIN", "SUPERADMIN"].includes(devRole)) {
+          setUser({
+            id: "dev-bypass-user",
+            email: `dev-${devRole.toLowerCase()}@localhost`,
+            full_name: `Dev ${devRole}`,
+            role: devRole,
+          });
+          setClient(null);
+          setAccessToken(null);
+          setLoading(false);
+          return;
+        }
+      }
 
       if (session) {
         try {
@@ -73,6 +94,7 @@ export function AuthProvider({ children }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    localStorage.removeItem(DEV_BYPASS_ROLE_KEY);
     setUser(null);
     setClient(null);
     setAccessToken(null);

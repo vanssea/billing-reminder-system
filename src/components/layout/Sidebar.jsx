@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
@@ -64,11 +65,23 @@ function Tooltip({ label, collapsed }) {
   );
 }
 
-export default function Sidebar({
-  role = "superadmin",
-  collapsed = false,
-  onToggle,
-}) {
+const STORAGE_KEY = "sidebar-collapsed";
+
+export default function Sidebar({ role = "superadmin" }) {
+  // Sidebar adalah satu-satunya pengelola status collapse. Status dipublikasi
+  // lewat data-sidebar di <body> sehingga Header dan konten halaman (class
+  // app-header / app-content di index.css) mengikuti tanpa state tambahan.
+  const [collapsed, setCollapsed] = useState(() => {
+    const stored = localStorage.getItem(STORAGE_KEY) === "true";
+    document.body.dataset.sidebar = stored ? "collapsed" : "open";
+    return stored;
+  });
+
+  useEffect(() => {
+    document.body.dataset.sidebar = collapsed ? "collapsed" : "open";
+    localStorage.setItem(STORAGE_KEY, String(collapsed));
+  }, [collapsed]);
+
   const navigate = useNavigate();
   const location = useLocation();
   const menu =
@@ -111,7 +124,7 @@ const activeLabel =
 
           <button
             type="button"
-            onClick={onToggle}
+            onClick={() => setCollapsed((prev) => !prev)}
             aria-label={collapsed ? "Perluas sidebar" : "Minimalkan sidebar"}
             title={collapsed ? "Perluas sidebar" : "Minimalkan sidebar"}
             className="absolute right-[-12px] top-5 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-md transition hover:border-brand-300 hover:text-brand-600"

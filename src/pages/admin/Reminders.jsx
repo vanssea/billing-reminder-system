@@ -201,7 +201,7 @@ export default function AdminReminders() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fcf8ff] pt-16 md:pl-[280px]">
+    <div className="min-h-screen bg-[#fcf8ff] pt-16 app-content">
       <Sidebar role="admin" />
       <Header />
       <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">

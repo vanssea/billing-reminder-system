@@ -13,6 +13,7 @@ func InvoiceRoutes(router *chi.Mux, handler *handlers.InvoiceHandler) {
 
 		r.Get("/{id}", handler.GetInvoiceByID)
 		r.Put("/{id}", handler.UpdateInvoice)
+		r.Post("/{id}/send", handler.SendInvoice)
 		r.Delete("/{id}", handler.DeleteInvoice)
 	})
 }

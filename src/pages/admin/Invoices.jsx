@@ -4,7 +4,7 @@ import {
   CheckCircle2, Clock, AlertTriangle, Users, Loader2,
   Plus, Pencil, Trash2, ArrowDown, ArrowUp, Send, XCircle,
 } from "lucide-react";
-import { getInvoices, getInvoiceById, createInvoice, updateInvoice, deleteInvoice } from "../../services/invoiceApi";
+import { getInvoices, getInvoiceById, createInvoice, updateInvoice, deleteInvoice, sendInvoice } from "../../services/invoiceApi";
 import { getClients } from "../../services/clientApi";
 import { getProducts } from "../../services/productApi";
 import InvoiceTemplate from "../../components/invoice/InvoiceTemplate";
@@ -238,19 +238,16 @@ export default function AdminInvoices() {
     if (!sendTarget) return;
     setSaving(true);
     try {
-      await updateInvoice(sendTarget.id, {
-        ...sendTarget,
-        status: "SENT",
-        invoice_date: sendTarget.invoice_date,
-        due_date: sendTarget.due_date,
-        items: (sendTarget.items || []).map((it) => ({ product_id: it.product_id, quantity: it.quantity })),
-      });
-      setSuccess(`Invoice ${sendTarget.invoice_number} berhasil dikirim.`);
+      await sendInvoice(sendTarget.id);
+      setSuccess(`Invoice ${sendTarget.invoice_number} berhasil dikirim ke WhatsApp client.`);
       setSendTarget(null);
       const refreshed = await getInvoices();
       setInvoices(refreshed);
     } catch (err) {
       setError(err.message || "Gagal mengirim invoice");
+      setSendTarget(null);
+      const refreshed = await getInvoices();
+      setInvoices(refreshed);
     } finally {
       setSaving(false);
     }

@@ -58,6 +58,17 @@ func (h *InvoiceHandler) GetInvoicesByClientID(w http.ResponseWriter, r *http.Re
 	json.NewEncoder(w).Encode(invoices)
 }
 
+func (h *InvoiceHandler) GetInvoices(w http.ResponseWriter, r *http.Request) {
+	invoices, err := h.Service.GetInvoices()
+	if err != nil {
+		http.Error(w, "Gagal mengambil data invoice", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(invoices)
+}
+
 func (h *InvoiceHandler) GetInvoiceByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -120,6 +131,33 @@ func (h *InvoiceHandler) UpdateInvoice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(invoice)
+}
+
+func (h *InvoiceHandler) SendInvoice(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	invoice, err := h.Service.SendInvoice(id)
+
+	if err != nil {
+		message := err.Error()
+
+		if strings.Contains(message, "ditemukan") {
+			http.Error(w, message, http.StatusNotFound)
+			return
+		}
+
+		if strings.Contains(message, "hanya invoice") {
+			http.Error(w, message, http.StatusBadRequest)
+			return
+		}
+
+		http.Error(w, message, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
 	json.NewEncoder(w).Encode(invoice)
 }
 

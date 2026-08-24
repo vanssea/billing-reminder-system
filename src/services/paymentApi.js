@@ -1,7 +1,8 @@
-const API_URL = "http://localhost:8080/api/client";
+const API_URL = "http://localhost:8080/api/payments";
+const CLIENT_API_URL = "http://localhost:8080/api/client";
 
 export async function getClientPayments(token) {
-  const response = await fetch(`${API_URL}/payments`, {
+  const response = await fetch(`${CLIENT_API_URL}/payments`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -9,7 +10,10 @@ export async function getClientPayments(token) {
 
   if (!response.ok) {
     throw new Error("Gagal mengambil data pembayaran");
-const API_URL = "http://localhost:8080/api/payments";
+  }
+
+  return response.json();
+}
 
 export async function getPayments() {
   const response = await fetch(API_URL);
@@ -48,14 +52,6 @@ export async function approvePayment(id, verifiedBy = null) {
   return response.json();
 }
 
-export async function createPayment(data, token) {
-  const response = await fetch(`${API_URL}/payments`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
 export async function rejectPayment(id, { verifiedBy = null, notes = null } = {}) {
   const response = await fetch(`${API_URL}/${id}/reject`, {
     method: "PUT",
@@ -67,12 +63,25 @@ export async function rejectPayment(id, { verifiedBy = null, notes = null } = {}
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || "Gagal membuat pembayaran");
+    throw new Error(message || "Gagal menolak pembayaran");
   }
 
   return response.json();
 }
-    throw new Error(message || "Gagal menolak pembayaran");
+
+export async function createPayment(data, token) {
+  const response = await fetch(`${CLIENT_API_URL}/payments`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Gagal membuat pembayaran");
   }
 
   return response.json();

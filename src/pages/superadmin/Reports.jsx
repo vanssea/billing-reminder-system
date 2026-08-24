@@ -686,7 +686,7 @@ export default function SuperAdminReports() {
   const currentTab = tabs.find((t) => t.key === activeTab) || tabs[0];
 
   return (
-    <div className="min-h-screen bg-[#fcf8ff] pt-16 md:pl-[280px]">
+    <div className="min-h-screen bg-[#fcf8ff] pt-16 app-content">
       <Sidebar />
       <Header role="superadmin" />
 

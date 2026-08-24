@@ -64,7 +64,7 @@ export async function deleteClient(id) {
 }
 
 export async function getClientByProfileId(profileId, token) {
-  const response = await fetch(`${API_URL}/profile/${profileId}`, {
+  const response = await fetch(`http://localhost:8080/api/clients/profile/${profileId}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -78,7 +78,7 @@ export async function getClientByProfileId(profileId, token) {
 }
 
 export async function createOrUpdateClientProfile(data, token) {
-  const response = await fetch(`${API_URL}/profile`, {
+  const response = await fetch("http://localhost:8080/api/clients/profile", {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -96,7 +96,7 @@ export async function createOrUpdateClientProfile(data, token) {
 }
 
 export async function createPurchaseRequest(data, token) {
-  const response = await fetch(`${API_URL}/purchase`, {
+  const response = await fetch("http://localhost:8080/api/client/purchase", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -109,6 +109,9 @@ export async function createPurchaseRequest(data, token) {
     const message = await response.text();
     throw new Error(message || "Gagal membuat permintaan pembelian");
   }
+
+  return response.json();
+}
 
 export async function updateClientStatus(id, status) {
   const response = await fetch(`${API_URL}/${id}/status`, {

@@ -36,6 +36,11 @@ func main() {
 
 	CREATE INDEX IF NOT EXISTS idx_app_notifications_dedup
 		ON app_notifications (type, reference_id);
+
+	ALTER TABLE app_notifications ADD COLUMN IF NOT EXISTS target_profile_id TEXT NOT NULL DEFAULT '';
+
+	CREATE INDEX IF NOT EXISTS idx_app_notifications_target_profile
+		ON app_notifications (target_role, target_profile_id, created_at DESC);
 	`
 
 	if _, err := db.Exec(context.Background(), schema); err != nil {

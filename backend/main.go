@@ -40,17 +40,14 @@ func main() {
 	faqService := services.NewFAQService(db)
 	authService := services.NewAuthService(db, clientService)
 	invoiceService := services.NewInvoiceService(db, clientService)
-	paymentService := services.NewPaymentService(db, clientService)
-	purchaseService := services.NewPurchaseService(db, clientService, productService)
-	authService := services.NewAuthService(db)
-	invoiceService := services.NewInvoiceService(db)
 	invoiceService.WhatsApp = waService
 	invoiceService.PDF = pdfService
+	paymentService := services.NewPaymentService(db, clientService)
+	paymentService.WhatsApp = waService
+	purchaseService := services.NewPurchaseService(db, clientService, productService)
 	reminderService := services.NewReminderService(db)
 	reminderService.WhatsApp = waService
 	reminderService.PDF = pdfService
-	paymentService := services.NewPaymentService(db)
-	paymentService.WhatsApp = waService
 	appNotificationService := services.NewAppNotificationService(db)
 
 	// Membuat handler
@@ -63,11 +60,9 @@ func main() {
 	invoiceHandler := handlers.NewInvoiceHandler(invoiceService, authService)
 	paymentHandler := handlers.NewPaymentHandler(paymentService, authService)
 	purchaseHandler := handlers.NewPurchaseHandler(purchaseService, authService)
-	invoiceHandler := handlers.NewInvoiceHandler(invoiceService)
 	reminderHandler := handlers.NewReminderHandler(reminderService)
-	paymentHandler := handlers.NewPaymentHandler(paymentService)
 	whatsappHandler := handlers.NewWhatsAppHandler(waService, pdfService)
-	appNotificationHandler := handlers.NewAppNotificationHandler(appNotificationService)
+	appNotificationHandler := handlers.NewAppNotificationHandler(appNotificationService, authService)
 
 	// Setup router
 	router := chi.NewRouter()

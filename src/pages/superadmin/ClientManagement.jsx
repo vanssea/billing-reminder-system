@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import {
@@ -266,7 +266,7 @@ export default function ClientManagement() {
     ) : null;
 
   return (
-    <div className="min-h-screen bg-[#fcf8ff] pt-16 md:pl-[280px]">
+    <div className="min-h-screen bg-[#fcf8ff] pt-16 app-content">
       <Sidebar />
       <Header role="superadmin" />
 

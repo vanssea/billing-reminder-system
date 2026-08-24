@@ -75,6 +75,79 @@ func (h *PaymentHandler) GetPaymentByID(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(payment)
 }
 
+func (h *PaymentHandler) GetPayments(w http.ResponseWriter, r *http.Request) {
+	payments, err := h.Service.GetPayments(r.Context())
+	if err != nil {
+		http.Error(w, "Gagal mengambil data pembayaran", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(payments)
+}
+
+func (h *PaymentHandler) ApprovePayment(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var req models.ApprovePaymentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Format JSON tidak valid", http.StatusBadRequest)
+		return
+	}
+
+	payment, err := h.Service.ApprovePayment(r.Context(), id, req)
+	if err != nil {
+		message := err.Error()
+
+		if strings.Contains(message, "tidak ditemukan") {
+			http.Error(w, message, http.StatusNotFound)
+			return
+		}
+
+		if strings.Contains(message, "sudah") {
+			http.Error(w, message, http.StatusConflict)
+			return
+		}
+
+		http.Error(w, message, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(payment)
+}
+
+func (h *PaymentHandler) RejectPayment(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var req models.RejectPaymentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Format JSON tidak valid", http.StatusBadRequest)
+		return
+	}
+
+	payment, err := h.Service.RejectPayment(r.Context(), id, req)
+	if err != nil {
+		message := err.Error()
+
+		if strings.Contains(message, "tidak ditemukan") {
+			http.Error(w, message, http.StatusNotFound)
+			return
+		}
+
+		if strings.Contains(message, "sudah") {
+			http.Error(w, message, http.StatusConflict)
+			return
+		}
+
+		http.Error(w, message, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(payment)
+}
+
 func (h *PaymentHandler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	var req models.CreatePaymentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

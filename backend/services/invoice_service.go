@@ -2,21 +2,21 @@ package services
 
 import (
 	"context"
-	"strconv"
-	"strings"
 	"fmt"
 	"math"
+	"strconv"
 	"time"
 
 	"billing-reminder-system/models"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type InvoiceService struct {
 	DB            *pgxpool.Pool
 	ClientService *ClientService
+	WhatsApp      *WhatsAppService
+	PDF           *PDFService
 }
 
 func NewInvoiceService(db *pgxpool.Pool, clientService *ClientService) *InvoiceService {
@@ -30,17 +30,121 @@ func (s *InvoiceService) GetClientByProfileID(profileID string) (*models.Client,
 	return s.ClientService.GetClientByProfileID(profileID)
 }
 
-func (s *InvoiceService) GetInvoicesByClientID(clientID string) ([]models.Invoice, error) {
-	query := `
-	DB       *pgxpool.Pool
-	WhatsApp *WhatsAppService
-	PDF      *PDFService
-}
+// ============================================================
+// GET INVOICES BY CLIENT ID
+// ============================================================
 
-func NewInvoiceService(db *pgxpool.Pool) *InvoiceService {
-	return &InvoiceService{
-		DB: db,
+func (s *InvoiceService) GetInvoicesByClientID(clientID string) ([]models.Invoice, error) {
+	rows, err := s.DB.Query(context.Background(), `
+		SELECT
+			id,
+			invoice_number,
+			client_id,
+			invoice_date,
+			due_date,
+			sent_at,
+			subtotal,
+			tax,
+			total,
+			status,
+			notes,
+			created_by,
+			created_at,
+			updated_at
+		FROM invoices
+		WHERE client_id = $1
+		ORDER BY invoice_date DESC
+	`, clientID)
+	if err != nil {
+		return nil, err
 	}
+	defer rows.Close()
+
+	var invoices []models.Invoice
+
+	for rows.Next() {
+		var invoice models.Invoice
+
+		err := rows.Scan(
+			&invoice.ID,
+			&invoice.InvoiceNumber,
+			&invoice.ClientID,
+			&invoice.InvoiceDate,
+			&invoice.DueDate,
+			&invoice.SentAt,
+			&invoice.Subtotal,
+			&invoice.Tax,
+			&invoice.Total,
+			&invoice.Status,
+			&invoice.Notes,
+			&invoice.CreatedBy,
+			&invoice.CreatedAt,
+			&invoice.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// =========================
+		// ITEMS
+		// =========================
+
+		invoice.Items, err = s.fetchItems(invoice.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		if invoice.Items == nil {
+			invoice.Items = []models.InvoiceItem{}
+		}
+
+		// =========================
+		// PAYMENTS
+		// =========================
+
+		invoice.Payments, err = s.fetchPayments(invoice.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		if invoice.Payments == nil {
+			invoice.Payments = []models.Payment{}
+		}
+
+		// =========================
+		// REMINDERS
+		// =========================
+
+		invoice.Reminders, err = s.fetchReminders(invoice.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		if invoice.Reminders == nil {
+			invoice.Reminders = []models.Reminder{}
+		}
+
+		// =========================
+		// ACTIVITY LOGS
+		// =========================
+
+		invoice.ActivityLogs, err = s.fetchActivityLogs(invoice.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		if invoice.ActivityLogs == nil {
+			invoice.ActivityLogs = []models.ActivityLog{}
+		}
+
+		invoices = append(invoices, invoice)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return invoices, nil
 }
 
 // ============================================================
@@ -105,13 +209,13 @@ func (s *InvoiceService) fetchPayments(invoiceID string) ([]models.Payment, erro
 			id,
 			invoice_id,
 			amount,
-			payment_date,
-			payment_method,
-			proof_url,
+			COALESCE(payment_date, created_at) AS payment_date,
+			COALESCE(payment_method, '') AS payment_method,
+			COALESCE(proof_url, '') AS proof_url,
 			status,
 			verified_by,
 			verified_at,
-			notes,
+			COALESCE(notes, '') AS notes,
 			created_at,
 			updated_at
 		FROM payments
@@ -268,21 +372,6 @@ func (s *InvoiceService) GetInvoices() ([]models.Invoice, error) {
 			client_id,
 			invoice_date,
 			due_date,
-			status,
-			subtotal,
-			tax,
-			total,
-			notes,
-			created_by,
-			sent_at,
-			created_at,
-			updated_at
-		FROM invoices
-		WHERE client_id = $1
-		ORDER BY invoice_date DESC
-	`
-
-	rows, err := s.DB.Query(context.Background(), query, clientID)
 			sent_at,
 			subtotal,
 			tax,
@@ -301,23 +390,6 @@ func (s *InvoiceService) GetInvoices() ([]models.Invoice, error) {
 	defer rows.Close()
 
 	var invoices []models.Invoice
-	for rows.Next() {
-		var inv models.Invoice
-		err := rows.Scan(
-			&inv.ID,
-			&inv.InvoiceNumber,
-			&inv.ClientID,
-			&inv.InvoiceDate,
-			&inv.DueDate,
-			&inv.Status,
-			&inv.Subtotal,
-			&inv.Tax,
-			&inv.Total,
-			&inv.Notes,
-			&inv.CreatedBy,
-			&inv.SentAt,
-			&inv.CreatedAt,
-			&inv.UpdatedAt,
 
 	for rows.Next() {
 		var invoice models.Invoice
@@ -341,20 +413,6 @@ func (s *InvoiceService) GetInvoices() ([]models.Invoice, error) {
 		if err != nil {
 			return nil, err
 		}
-		// Populate compatibility fields
-		inv.Product = inv.Notes
-		inv.Discount = 0
-		invoices = append(invoices, inv)
-	}
-	return invoices, rows.Err()
-}
-
-func (s *InvoiceService) GetInvoiceByID(id string) (*models.Invoice, error) {
-	query := `
-
-		// =========================
-		// ITEMS
-		// =========================
 
 		invoice.Items, err = s.fetchItems(invoice.ID)
 		if err != nil {
@@ -365,10 +423,6 @@ func (s *InvoiceService) GetInvoiceByID(id string) (*models.Invoice, error) {
 			invoice.Items = []models.InvoiceItem{}
 		}
 
-		// =========================
-		// PAYMENTS
-		// =========================
-
 		invoice.Payments, err = s.fetchPayments(invoice.ID)
 		if err != nil {
 			return nil, err
@@ -378,10 +432,6 @@ func (s *InvoiceService) GetInvoiceByID(id string) (*models.Invoice, error) {
 			invoice.Payments = []models.Payment{}
 		}
 
-		// =========================
-		// REMINDERS
-		// =========================
-
 		invoice.Reminders, err = s.fetchReminders(invoice.ID)
 		if err != nil {
 			return nil, err
@@ -390,10 +440,6 @@ func (s *InvoiceService) GetInvoiceByID(id string) (*models.Invoice, error) {
 		if invoice.Reminders == nil {
 			invoice.Reminders = []models.Reminder{}
 		}
-
-		// =========================
-		// ACTIVITY LOGS
-		// =========================
 
 		invoice.ActivityLogs, err = s.fetchActivityLogs(invoice.ID)
 		if err != nil {
@@ -428,13 +474,6 @@ func (s *InvoiceService) GetInvoiceByID(id string) (*models.Invoice, error) {
 			client_id,
 			invoice_date,
 			due_date,
-			status,
-			subtotal,
-			tax,
-			total,
-			notes,
-			created_by,
-			sent_at,
 			sent_at,
 			subtotal,
 			tax,
@@ -446,39 +485,6 @@ func (s *InvoiceService) GetInvoiceByID(id string) (*models.Invoice, error) {
 			updated_at
 		FROM invoices
 		WHERE id = $1
-	`
-
-	var inv models.Invoice
-	err := s.DB.QueryRow(context.Background(), query, id).Scan(
-		&inv.ID,
-		&inv.InvoiceNumber,
-		&inv.ClientID,
-		&inv.InvoiceDate,
-		&inv.DueDate,
-		&inv.Status,
-		&inv.Subtotal,
-		&inv.Tax,
-		&inv.Total,
-		&inv.Notes,
-		&inv.CreatedBy,
-		&inv.SentAt,
-		&inv.CreatedAt,
-		&inv.UpdatedAt,
-	)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-	// Populate compatibility fields
-	inv.Product = inv.Notes
-	inv.Discount = 0
-	return &inv, nil
-}
-
-func (s *InvoiceService) GetInvoiceTimeline(invoice *models.Invoice) ([]models.InvoiceTimelineStep, error) {
-	payments, err := s.GetPaymentsByInvoiceID(invoice.ID)
 	`, id).Scan(
 		&invoice.ID,
 		&invoice.InvoiceNumber,
@@ -504,6 +510,91 @@ func (s *InvoiceService) GetInvoiceTimeline(invoice *models.Invoice) ([]models.I
 	// =========================
 
 	invoice.Items, err = s.fetchItems(invoice.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	if invoice.Items == nil {
+		invoice.Items = []models.InvoiceItem{}
+	}
+
+	// =========================
+	// PAYMENTS
+	// =========================
+
+	invoice.Payments, err = s.fetchPayments(invoice.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	if invoice.Payments == nil {
+		invoice.Payments = []models.Payment{}
+	}
+
+	// =========================
+	// REMINDERS
+	// =========================
+
+	invoice.Reminders, err = s.fetchReminders(invoice.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	if invoice.Reminders == nil {
+		invoice.Reminders = []models.Reminder{}
+	}
+
+	// =========================
+	// ACTIVITY LOGS
+	// =========================
+
+	invoice.ActivityLogs, err = s.fetchActivityLogs(invoice.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	if invoice.ActivityLogs == nil {
+		invoice.ActivityLogs = []models.ActivityLog{}
+	}
+
+	// =========================
+	// CLIENT (untuk halaman invoice publik)
+	// =========================
+
+	var client models.Client
+	err = s.DB.QueryRow(context.Background(), `
+		SELECT
+			id,
+			company_name,
+			pic_name,
+			email,
+			phone,
+			address,
+			status
+		FROM clients
+		WHERE id = $1
+	`, invoice.ClientID).Scan(
+		&client.ID,
+		&client.CompanyName,
+		&client.PICName,
+		&client.Email,
+		&client.Phone,
+		&client.Address,
+		&client.Status,
+	)
+	if err == nil {
+		invoice.Client = &client
+	} else if err.Error() == "no rows in result set" {
+		invoice.Client = nil
+	} else {
+		return nil, err
+	}
+
+	return &invoice, nil
+}
+
+func (s *InvoiceService) GetInvoiceTimeline(invoice *models.Invoice) ([]models.InvoiceTimelineStep, error) {
+	payments, err := s.GetPaymentsByInvoiceID(invoice.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -628,13 +719,13 @@ func (s *InvoiceService) GetPaymentsByInvoiceID(invoiceID string) ([]models.Paym
 			id,
 			invoice_id,
 			amount,
-			payment_date,
-			payment_method,
-			proof_url,
+			COALESCE(payment_date, created_at) AS payment_date,
+			COALESCE(payment_method, '') AS payment_method,
+			COALESCE(proof_url, '') AS proof_url,
 			status,
 			verified_by,
 			verified_at,
-			notes,
+			COALESCE(notes, '') AS notes,
 			created_at,
 			updated_at
 		FROM payments
@@ -675,111 +766,6 @@ func (s *InvoiceService) GetPaymentsByInvoiceID(invoiceID string) ([]models.Paym
 		payments = append(payments, p)
 	}
 	return payments, rows.Err()
-}
-
-func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models.Invoice, error) {
-	invoiceDate, _ := time.Parse("2006-01-02", req.InvoiceDate)
-	dueDate, _ := time.Parse("2006-01-02", req.DueDate)
-
-	var sentAt *time.Time
-	if req.SentAt != nil {
-		d, _ := time.Parse("2006-01-02", *req.SentAt)
-		sentAt = &d
-	}
-
-	query := `
-		INSERT INTO invoices (
-			client_id, invoice_date, due_date, status,
-			subtotal, tax, total, notes, created_by, sent_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		RETURNING
-			id, invoice_number, client_id, invoice_date, due_date, status,
-			subtotal, tax, total, notes, created_by, sent_at, created_at, updated_at
-	`
-
-	var inv models.Invoice
-	err := s.DB.QueryRow(
-		context.Background(), query,
-		req.ClientID, invoiceDate, dueDate, req.Status,
-		req.Subtotal, req.Tax, req.Total, req.Notes, req.CreatedBy, sentAt,
-	).Scan(
-		&inv.ID, &inv.InvoiceNumber, &inv.ClientID, &inv.InvoiceDate, &inv.DueDate, &inv.Status,
-		&inv.Subtotal, &inv.Tax, &inv.Total, &inv.Notes, &inv.CreatedBy, &inv.SentAt, &inv.CreatedAt, &inv.UpdatedAt,
-	if invoice.Items == nil {
-		invoice.Items = []models.InvoiceItem{}
-	}
-
-	// =========================
-	// PAYMENTS
-	// =========================
-
-	invoice.Payments, err = s.fetchPayments(invoice.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	if invoice.Payments == nil {
-		invoice.Payments = []models.Payment{}
-	}
-
-	// =========================
-	// REMINDERS
-	// =========================
-
-	invoice.Reminders, err = s.fetchReminders(invoice.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	if invoice.Reminders == nil {
-		invoice.Reminders = []models.Reminder{}
-	}
-
-	// =========================
-	// ACTIVITY LOGS
-	// =========================
-
-	invoice.ActivityLogs, err = s.fetchActivityLogs(invoice.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	if invoice.ActivityLogs == nil {
-		invoice.ActivityLogs = []models.ActivityLog{}
-	}
-
-	// =========================
-	// CLIENT (untuk halaman invoice publik)
-	// =========================
-
-	var client models.Client
-	err = s.DB.QueryRow(context.Background(), `
-		SELECT
-			id,
-			company_name,
-			pic_name,
-			email,
-			phone,
-			address,
-			status
-		FROM clients
-		WHERE id = $1
-	`, invoice.ClientID).Scan(
-		&client.ID,
-		&client.CompanyName,
-		&client.PICName,
-		&client.Email,
-		&client.Phone,
-		&client.Address,
-		&client.Status,
-	)
-	if err == nil {
-		invoice.Client = &client
-	} else if err != pgx.ErrNoRows {
-		return nil, err
-	}
-
-	return &invoice, nil
 }
 
 // ============================================================
@@ -1038,6 +1024,17 @@ func (s *InvoiceService) UpdateInvoice(
 	id string,
 	req models.UpdateInvoiceRequest,
 ) (*models.Invoice, error) {
+	return s.updateInvoiceInternal(id, req, true)
+}
+
+// updateInvoiceInternal menjalankan seluruh logic pembaruan invoice.
+// autoSendWA=true mempertahankan perilaku lama: kirim WhatsApp otomatis
+// (fire-and-forget) pada transisi DRAFT -> SENT.
+func (s *InvoiceService) updateInvoiceInternal(
+	id string,
+	req models.UpdateInvoiceRequest,
+	autoSendWA bool,
+) (*models.Invoice, error) {
 
 	if len(req.Items) == 0 {
 		return nil, fmt.Errorf("invoice harus memiliki minimal 1 item")
@@ -1167,83 +1164,6 @@ func (s *InvoiceService) UpdateInvoice(
 	if err != nil {
 		return nil, err
 	}
-	return &inv, nil
-}
-
-func (s *InvoiceService) UpdateInvoice(id string, req models.UpdateInvoiceRequest) (*models.Invoice, error) {
-	setParts := []string{}
-	args := []interface{}{}
-	argIdx := 1
-
-	if req.InvoiceDate != nil {
-		setParts = append(setParts, "invoice_date = $"+strconv.Itoa(argIdx))
-		d, _ := time.Parse("2006-01-02", *req.InvoiceDate)
-		args = append(args, d)
-		argIdx++
-	}
-	if req.DueDate != nil {
-		setParts = append(setParts, "due_date = $"+strconv.Itoa(argIdx))
-		d, _ := time.Parse("2006-01-02", *req.DueDate)
-		args = append(args, d)
-		argIdx++
-	}
-	if req.Status != nil {
-		setParts = append(setParts, "status = $"+strconv.Itoa(argIdx))
-		args = append(args, *req.Status)
-		argIdx++
-	}
-	if req.Subtotal != nil {
-		setParts = append(setParts, "subtotal = $"+strconv.Itoa(argIdx))
-		args = append(args, *req.Subtotal)
-		argIdx++
-	}
-	if req.Tax != nil {
-		setParts = append(setParts, "tax = $"+strconv.Itoa(argIdx))
-		args = append(args, *req.Tax)
-		argIdx++
-	}
-	if req.Total != nil {
-		setParts = append(setParts, "total = $"+strconv.Itoa(argIdx))
-		args = append(args, *req.Total)
-		argIdx++
-	}
-	if req.Notes != nil {
-		setParts = append(setParts, "notes = $"+strconv.Itoa(argIdx))
-		args = append(args, *req.Notes)
-		argIdx++
-	}
-	if req.SentAt != nil {
-		setParts = append(setParts, "sent_at = $"+strconv.Itoa(argIdx))
-		d, _ := time.Parse("2006-01-02", *req.SentAt)
-		args = append(args, d)
-		argIdx++
-	}
-
-	if len(setParts) == 0 {
-		return s.GetInvoiceByID(id)
-	}
-
-	setParts = append(setParts, "updated_at = now()")
-	args = append(args, id)
-
-	query := "UPDATE invoices SET " + strings.Join(setParts, ", ") + " WHERE id = $" + strconv.Itoa(argIdx) + " RETURNING id, invoice_number, client_id, invoice_date, due_date, status, subtotal, tax, total, notes, created_by, sent_at, created_at, updated_at"
-
-	var inv models.Invoice
-	err := s.DB.QueryRow(context.Background(), query, args...).Scan(
-		&inv.ID, &inv.InvoiceNumber, &inv.ClientID, &inv.InvoiceDate, &inv.DueDate, &inv.Status,
-		&inv.Subtotal, &inv.Tax, &inv.Total, &inv.Notes, &inv.CreatedBy, &inv.SentAt, &inv.CreatedAt, &inv.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return &inv, nil
-}
-
-func (s *InvoiceService) DeleteInvoice(id string) error {
-	query := `DELETE FROM invoices WHERE id = $1`
-	_, err := s.DB.Exec(context.Background(), query, id)
-	return err
-}
 
 	// Hapus item lama
 	_, err = tx.Exec(
@@ -1346,7 +1266,7 @@ func (s *InvoiceService) DeleteInvoice(id string) error {
 		return nil, err
 	}
 
-	if previousStatus == "DRAFT" && invoice.Status == "SENT" && s.WhatsApp != nil {
+	if autoSendWA && previousStatus == "DRAFT" && invoice.Status == "SENT" && s.WhatsApp != nil {
 		go SendInvoiceCreatedWhatsApp(s.DB, s.WhatsApp, s.PDF, invoice.ID)
 	}
 
@@ -1388,6 +1308,54 @@ func (s *InvoiceService) DeleteInvoice(id string) error {
 	}
 
 	return &invoice, nil
+}
+
+// ============================================================
+// SEND INVOICE VIA WHATSAPP
+// ============================================================
+
+// SendInvoice mengubah status invoice menjadi SENT menggunakan logic
+// pembaruan yang sudah ada, lalu mengirim pesan teks + PDF invoice ke
+// WhatsApp client secara sinkron. Error yang dikembalikan mencerminkan
+// hasil yang sebenarnya (tanpa sukses palsu).
+func (s *InvoiceService) SendInvoice(id string) (*models.Invoice, error) {
+	current, err := s.GetInvoiceByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if current.Status != "DRAFT" && current.Status != "UNPAID" {
+		return nil, fmt.Errorf("hanya invoice berstatus DRAFT atau UNPAID yang bisa dikirim")
+	}
+
+	items := make([]models.InvoiceItemRequest, 0, len(current.Items))
+	for _, it := range current.Items {
+		items = append(items, models.InvoiceItemRequest{
+			ProductID: it.ProductID,
+			Quantity:  it.Quantity,
+		})
+	}
+
+	req := models.UpdateInvoiceRequest{
+		InvoiceNumber: current.InvoiceNumber,
+		ClientID:      current.ClientID,
+		InvoiceDate:   current.InvoiceDate.Format("2006-01-02"),
+		DueDate:       current.DueDate.Format("2006-01-02"),
+		Status:        "SENT",
+		Notes:         current.Notes,
+		Items:         items,
+	}
+
+	updated, err := s.updateInvoiceInternal(id, req, false)
+	if err != nil {
+		return nil, fmt.Errorf("gagal mengubah status invoice: %v", err)
+	}
+
+	if err := SendInvoiceToClient(s.DB, s.WhatsApp, s.PDF, id); err != nil {
+		return updated, fmt.Errorf("invoice berstatus SENT tetapi pengiriman whatsapp gagal: %v", err)
+	}
+
+	return updated, nil
 }
 
 // ============================================================

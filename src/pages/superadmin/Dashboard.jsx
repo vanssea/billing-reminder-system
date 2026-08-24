@@ -599,7 +599,7 @@ export default function SuperAdminDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 md:pl-[280px]">
+      <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 app-content">
         <Sidebar />
         <Header role="superadmin" />
 
@@ -620,7 +620,7 @@ export default function SuperAdminDashboard() {
 
   if (error || !data) {
     return (
-      <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 md:pl-[280px]">
+      <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 app-content">
         <Sidebar />
         <Header role="superadmin" />
 
@@ -709,7 +709,7 @@ export default function SuperAdminDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 md:pl-[280px]">
+    <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 app-content">
       <Sidebar />
       <Header role="superadmin" />
 

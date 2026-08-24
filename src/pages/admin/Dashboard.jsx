@@ -233,7 +233,7 @@ export default function AdminDashboard() {
   const pendingVerifications = data?.pending_verifications || [];
 
   return (
-    <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 md:pl-[280px]">
+    <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 app-content">
       <Sidebar role="admin" />
       <Header role="admin" />
 

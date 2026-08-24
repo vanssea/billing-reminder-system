@@ -107,3 +107,20 @@ body {
   background-size: 22px 22px;
   opacity: 0.12;
 }
+
+/* Offset konten & header mengikuti status sidebar.
+   Sidebar.jsx menulis data-sidebar di <body>; tidak perlu state per halaman.
+   Nilai harus persis sama dengan lebar sidebar: w-[280px] dan w-20. */
+.app-content {
+  transition-property: padding-left;
+  transition-duration: 300ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (min-width: 768px) {
+  body[data-sidebar='open'] .app-header { left: 280px; }
+  body[data-sidebar='open'] .app-content { padding-left: 280px; }
+
+  body[data-sidebar='collapsed'] .app-header { left: 5rem; }
+  body[data-sidebar='collapsed'] .app-content { padding-left: 5rem; }
+}

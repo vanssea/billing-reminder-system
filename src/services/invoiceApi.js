@@ -1,7 +1,8 @@
-const API_URL = "http://localhost:8080/api/client";
+const API_URL = "http://localhost:8080/api/invoices";
+const CLIENT_API_URL = "http://localhost:8080/api/client";
 
 export async function getClientInvoices(token) {
-  const response = await fetch(`${API_URL}/invoices`, {
+  const response = await fetch(`${CLIENT_API_URL}/invoices`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -9,7 +10,10 @@ export async function getClientInvoices(token) {
 
   if (!response.ok) {
     throw new Error("Gagal mengambil data invoice");
-const API_URL = "http://localhost:8080/api/invoices";
+  }
+
+  return response.json();
+}
 
 export async function getInvoices() {
   const response = await fetch(API_URL);
@@ -49,7 +53,7 @@ export async function createInvoice(data) {
 }
 
 export async function getClientInvoiceById(id, token) {
-  const response = await fetch(`${API_URL}/invoices/${id}`, {
+  const response = await fetch(`${CLIENT_API_URL}/invoices/${id}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -61,6 +65,7 @@ export async function getClientInvoiceById(id, token) {
 
   return response.json();
 }
+
 export async function updateInvoice(id, data) {
   const response = await fetch(`${API_URL}/${id}`, {
     method: "PUT",
@@ -73,6 +78,19 @@ export async function updateInvoice(id, data) {
   if (!response.ok) {
     const message = await response.text();
     throw new Error(message || "Gagal mengupdate invoice");
+  }
+
+  return response.json();
+}
+
+export async function sendInvoice(id) {
+  const response = await fetch(`${API_URL}/${id}/send`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Gagal mengirim invoice");
   }
 
   return response.json();

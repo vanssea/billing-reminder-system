@@ -345,7 +345,7 @@ export default function AdminReports() {
   const currentTab = tabs.find((t) => t.key === activeTab) || tabs[0];
 
   return (
-    <div className="min-h-screen bg-[#fcf8ff] pt-16 md:pl-[280px]">
+    <div className="min-h-screen bg-[#fcf8ff] pt-16 app-content">
       <Sidebar role="admin" />
       <Header />
       <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
