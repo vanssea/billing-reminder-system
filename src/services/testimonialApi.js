@@ -20,10 +20,11 @@ export async function getTestimonialById(id) {
   return response.json();
 }
 
-export async function createTestimonial(data) {
+export async function createTestimonial(data, token) {
   const response = await fetch(API_URL, {
     method: "POST",
     headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       "Content-Type": "application/json",
     },
     body: JSON.stringify(data),
@@ -37,10 +38,11 @@ export async function createTestimonial(data) {
   return response.json();
 }
 
-export async function updateTestimonial(id, data) {
+export async function updateTestimonial(id, data, token) {
   const response = await fetch(`${API_URL}/${id}`, {
     method: "PUT",
     headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       "Content-Type": "application/json",
     },
     body: JSON.stringify(data),
@@ -54,9 +56,12 @@ export async function updateTestimonial(id, data) {
   return response.json();
 }
 
-export async function deleteTestimonial(id) {
+export async function deleteTestimonial(id, token) {
   const response = await fetch(`${API_URL}/${id}`, {
     method: "DELETE",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
   });
 
   if (!response.ok) {

@@ -20,10 +20,11 @@ export async function getFAQById(id) {
   return response.json();
 }
 
-export async function createFAQ(data) {
+export async function createFAQ(data, token) {
   const response = await fetch(API_URL, {
     method: "POST",
     headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       "Content-Type": "application/json",
     },
     body: JSON.stringify(data),
@@ -37,10 +38,11 @@ export async function createFAQ(data) {
   return response.json();
 }
 
-export async function updateFAQ(id, data) {
+export async function updateFAQ(id, data, token) {
   const response = await fetch(`${API_URL}/${id}`, {
     method: "PUT",
     headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       "Content-Type": "application/json",
     },
     body: JSON.stringify(data),
@@ -54,9 +56,12 @@ export async function updateFAQ(id, data) {
   return response.json();
 }
 
-export async function deleteFAQ(id) {
+export async function deleteFAQ(id, token) {
   const response = await fetch(`${API_URL}/${id}`, {
     method: "DELETE",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
   });
 
   if (!response.ok) {

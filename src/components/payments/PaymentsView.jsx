@@ -54,7 +54,7 @@ function ProofPreview({ payment }) {
 }
 
 export default function PaymentsView({ role = "admin" }) {
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -73,7 +73,7 @@ export default function PaymentsView({ role = "admin" }) {
       try {
         setLoading(true);
         setError("");
-        const data = await getPayments();
+        const data = await getPayments(accessToken);
         if (!ignore) setPayments(data);
       } catch (err) {
         if (!ignore) setError(err.message || "Gagal memuat data pembayaran");
@@ -82,7 +82,7 @@ export default function PaymentsView({ role = "admin" }) {
       }
     })();
     return () => { ignore = true; };
-  }, []);
+  }, [accessToken]);
 
   useEffect(() => {
     document.body.style.overflow = detailTarget || approveTarget || rejectTarget ? "hidden" : "";
@@ -122,7 +122,7 @@ export default function PaymentsView({ role = "admin" }) {
     if (!approveTarget) return;
     setSaving(true);
     try {
-      const updated = await approvePayment(approveTarget.id, user?.id || null);
+      const updated = await approvePayment(approveTarget.id, accessToken, user?.id || null);
       replacePayment(updated);
       setSuccess(`Pembayaran ${approveTarget.invoice_number} disetujui. Invoice kini berstatus Lunas.`);
       setApproveTarget(null);
@@ -142,8 +142,7 @@ export default function PaymentsView({ role = "admin" }) {
     if (!rejectTarget) return;
     setSaving(true);
     try {
-      const updated = await rejectPayment(rejectTarget.id, {
-        verifiedBy: user?.id || null,
+      const updated = await rejectPayment(rejectTarget.id, accessToken, {
         notes: rejectNotes.trim() || null,
       });
       replacePayment(updated);

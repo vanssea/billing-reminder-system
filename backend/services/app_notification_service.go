@@ -25,9 +25,9 @@ func NewAppNotificationService(db *pgxpool.Pool) *AppNotificationService {
 
 func (s *AppNotificationService) insert(ctx context.Context, n *models.AppNotification) error {
 	_, err := s.DB.Exec(ctx, `
-		INSERT INTO app_notifications (type, title, message, reference_id, target_role)
-		VALUES ($1, $2, $3, NULLIF($4, ''), $5)
-	`, n.Type, n.Title, n.Message, derefOrEmpty(n.ReferenceID), n.TargetRole)
+		INSERT INTO app_notifications (type, title, message, reference_id, target_role, target_profile_id)
+		VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6)
+	`, n.Type, n.Title, n.Message, derefOrEmpty(n.ReferenceID), n.TargetRole, n.TargetProfileID)
 	return err
 }
 
@@ -55,7 +55,7 @@ func (s *AppNotificationService) insertOnce(ctx context.Context, n *models.AppNo
 	return s.insert(ctx, n)
 }
 
-func (s *AppNotificationService) List(ctx context.Context, roles []string, limit int) ([]models.AppNotification, error) {
+func (s *AppNotificationService) List(ctx context.Context, roles []string, limit int, profileID string) ([]models.AppNotification, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 15
 	}
@@ -64,9 +64,10 @@ func (s *AppNotificationService) List(ctx context.Context, roles []string, limit
 		SELECT id, type, title, message, reference_id, target_role, is_read, created_at
 		FROM app_notifications
 		WHERE target_role = ANY($1::text[])
+		  AND ($2::text = '' OR target_profile_id IN ('', $2))
 		ORDER BY created_at DESC
-		LIMIT $2
-	`, roles, limit)
+		LIMIT $3
+	`, roles, profileID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -83,27 +84,39 @@ func (s *AppNotificationService) List(ctx context.Context, roles []string, limit
 	return result, rows.Err()
 }
 
-func (s *AppNotificationService) CountUnread(ctx context.Context, roles []string) (int64, error) {
+func (s *AppNotificationService) CountUnread(ctx context.Context, roles []string, profileID string) (int64, error) {
 	var count int64
 	err := s.DB.QueryRow(ctx, `
 		SELECT COUNT(*) FROM app_notifications
-		WHERE target_role = ANY($1::text[]) AND is_read = FALSE
-	`, roles).Scan(&count)
+		WHERE target_role = ANY($1::text[])
+		  AND ($2::text = '' OR target_profile_id IN ('', $2))
+		  AND is_read = FALSE
+	`, roles, profileID).Scan(&count)
 	return count, err
 }
 
-func (s *AppNotificationService) MarkRead(ctx context.Context, id int64) error {
-	_, err := s.DB.Exec(ctx, `
-		UPDATE app_notifications SET is_read = TRUE WHERE id = $1
-	`, id)
-	return err
-}
-
-func (s *AppNotificationService) MarkAllRead(ctx context.Context, roles []string) (int64, error) {
+// MarkRead menandai satu notifikasi dibaca, hanya jika notifikasi tersebut
+// berada dalam scope role/profile peminta (ownership check).
+func (s *AppNotificationService) MarkRead(ctx context.Context, id int64, roles []string, profileID string) (int64, error) {
 	tag, err := s.DB.Exec(ctx, `
 		UPDATE app_notifications SET is_read = TRUE
-		WHERE target_role = ANY($1::text[]) AND is_read = FALSE
-	`, roles)
+		WHERE id = $1
+		  AND target_role = ANY($2::text[])
+		  AND ($3::text = '' OR target_profile_id IN ('', $3))
+	`, id, roles, profileID)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+func (s *AppNotificationService) MarkAllRead(ctx context.Context, roles []string, profileID string) (int64, error) {
+	tag, err := s.DB.Exec(ctx, `
+		UPDATE app_notifications SET is_read = TRUE
+		WHERE target_role = ANY($1::text[])
+		  AND ($2::text = '' OR target_profile_id IN ('', $2))
+		  AND is_read = FALSE
+	`, roles, profileID)
 	if err != nil {
 		return 0, err
 	}
@@ -115,21 +128,22 @@ func (s *AppNotificationService) MarkAllRead(ctx context.Context, roles []string
 // ============================================================
 
 type appPaymentEventData struct {
-	InvoiceNumber string
-	ClientCompany string
-	Amount        float64
-	Status        string
+	InvoiceNumber   string
+	ClientCompany   string
+	ClientProfileID string
+	Amount          float64
+	Status          string
 }
 
 func fetchAppPaymentData(ctx context.Context, db *pgxpool.Pool, paymentID string) (*appPaymentEventData, error) {
 	var d appPaymentEventData
 	err := db.QueryRow(ctx, `
-		SELECT i.invoice_number, c.company_name, p.amount, p.status
+		SELECT i.invoice_number, c.company_name, COALESCE(c.profile_id::text, ''), p.amount, p.status
 		FROM payments p
 		JOIN invoices i ON i.id = p.invoice_id
 		JOIN clients c ON c.id = i.client_id
 		WHERE p.id = $1
-	`, paymentID).Scan(&d.InvoiceNumber, &d.ClientCompany, &d.Amount, &d.Status)
+	`, paymentID).Scan(&d.InvoiceNumber, &d.ClientCompany, &d.ClientProfileID, &d.Amount, &d.Status)
 	if err != nil {
 		return nil, err
 	}
@@ -162,6 +176,24 @@ func NotifyPaymentApproved(db *pgxpool.Pool, paymentID string) {
 
 	if err := svc.insert(ctx, n); err != nil {
 		log.Printf("Gagal menyimpan notifikasi payment approved (%s): %v", paymentID, err)
+	}
+
+	if d.ClientProfileID != "" {
+		clientNotif := &models.AppNotification{
+			Type:  models.NotifTypePaymentApproved,
+			Title: "Pembayaran Disetujui",
+			Message: fmt.Sprintf(
+				"Pembayaran Anda untuk invoice %s sebesar %s telah disetujui. Invoice berstatus lunas.",
+				d.InvoiceNumber, formatRupiah(d.Amount),
+			),
+			ReferenceID:     strPtr(paymentID),
+			TargetRole:      models.NotifRoleClient,
+			TargetProfileID: d.ClientProfileID,
+		}
+
+		if err := svc.insert(ctx, clientNotif); err != nil {
+			log.Printf("Gagal menyimpan notifikasi client payment approved (%s): %v", paymentID, err)
+		}
 	}
 }
 
@@ -196,6 +228,29 @@ func NotifyPaymentRejected(db *pgxpool.Pool, paymentID, reason string) {
 
 	if err := svc.insert(ctx, n); err != nil {
 		log.Printf("Gagal menyimpan notifikasi payment rejected (%s): %v", paymentID, err)
+	}
+
+	if d.ClientProfileID != "" {
+		clientMessage := fmt.Sprintf(
+			"Pembayaran Anda untuk invoice %s sebesar %s ditolak.",
+			d.InvoiceNumber, formatRupiah(d.Amount),
+		)
+		if strings.TrimSpace(reason) != "" {
+			clientMessage += " Alasan: " + strings.TrimSpace(reason)
+		}
+
+		clientNotif := &models.AppNotification{
+			Type:            models.NotifTypePaymentRejected,
+			Title:           "Pembayaran Ditolak",
+			Message:         clientMessage,
+			ReferenceID:     strPtr(paymentID),
+			TargetRole:      models.NotifRoleClient,
+			TargetProfileID: d.ClientProfileID,
+		}
+
+		if err := svc.insert(ctx, clientNotif); err != nil {
+			log.Printf("Gagal menyimpan notifikasi client payment rejected (%s): %v", paymentID, err)
+		}
 	}
 }
 

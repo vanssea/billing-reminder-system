@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"billing-reminder-system/middleware"
 	"billing-reminder-system/models"
 	"billing-reminder-system/services"
 
@@ -25,16 +26,10 @@ func NewPurchaseHandler(service *services.PurchaseService, authService *services
 }
 
 func (h *PurchaseHandler) CreatePurchaseRequest(w http.ResponseWriter, r *http.Request) {
-	authHeader := r.Header.Get("Authorization")
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		http.Error(w, "Token tidak ditemukan", http.StatusUnauthorized)
-		return
-	}
-	token := strings.TrimPrefix(authHeader, "Bearer ")
-
-	profile, err := h.AuthService.GetProfileByToken(token)
-	if err != nil {
-		http.Error(w, "Token tidak valid", http.StatusUnauthorized)
+	// Identitas dari middleware RequireAuth.
+	profile := middleware.ProfileFromContext(r)
+	if profile == nil {
+		http.Error(w, "Belum terautentikasi", http.StatusUnauthorized)
 		return
 	}
 
@@ -74,21 +69,35 @@ func (h *PurchaseHandler) CreatePurchaseRequest(w http.ResponseWriter, r *http.R
 }
 
 func (h *PurchaseHandler) GetMyPurchaseRequests(w http.ResponseWriter, r *http.Request) {
-	authHeader := r.Header.Get("Authorization")
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		http.Error(w, "Token tidak ditemukan", http.StatusUnauthorized)
-		return
-	}
-	token := strings.TrimPrefix(authHeader, "Bearer ")
-
-	profile, err := h.Service.ClientService.GetClientByProfileID(token)
-	if err != nil {
-		http.Error(w, "Token tidak valid", http.StatusUnauthorized)
+	// Identitas dari middleware: profile -> client -> daftar request miliknya.
+	profile := middleware.ProfileFromContext(r)
+	if profile == nil {
+		http.Error(w, "Belum terautentikasi", http.StatusUnauthorized)
 		return
 	}
 
-	requests, err := h.Service.GetPurchaseRequestsByClientID(profile.ID)
+	client, err := h.Service.ClientService.GetClientByProfileID(profile.ID)
 	if err != nil {
+		http.Error(w, "Client tidak ditemukan", http.StatusNotFound)
+		return
+	}
+
+	requests, err := h.Service.GetPurchaseRequestsByClientID(client.ID)
+	if err != nil {
+		log.Printf("GetMyPurchaseRequests: %v", err)
+		http.Error(w, "Gagal mengambil data permintaan pembelian", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(requests)
+}
+
+// GetAllPurchaseRequests untuk staff internal: seluruh permintaan pembelian.
+func (h *PurchaseHandler) GetAllPurchaseRequests(w http.ResponseWriter, r *http.Request) {
+	requests, err := h.Service.GetAllPurchaseRequests()
+	if err != nil {
+		log.Printf("GetAllPurchaseRequests: %v", err)
 		http.Error(w, "Gagal mengambil data permintaan pembelian", http.StatusInternalServerError)
 		return
 	}
@@ -102,10 +111,18 @@ func (h *PurchaseHandler) GetPurchaseRequestByID(w http.ResponseWriter, r *http.
 
 	req, err := h.Service.GetPurchaseRequestByID(id)
 	if err != nil {
+		log.Printf("GetPurchaseRequestByID: %v", err)
 		http.Error(w, "Gagal mengambil data permintaan pembelian", http.StatusInternalServerError)
 		return
 	}
 	if req == nil {
+		http.Error(w, "Permintaan pembelian tidak ditemukan", http.StatusNotFound)
+		return
+	}
+
+	// CLIENT hanya boleh melihat purchase request miliknya sendiri.
+	profile := middleware.ProfileFromContext(r)
+	if profile != nil && profile.Role == models.RoleClient && req.ProfileID != profile.ID {
 		http.Error(w, "Permintaan pembelian tidak ditemukan", http.StatusNotFound)
 		return
 	}

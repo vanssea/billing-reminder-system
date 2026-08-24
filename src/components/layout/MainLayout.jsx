@@ -1,34 +1,15 @@
-import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 
-const STORAGE_KEY = "sidebar-collapsed";
-
 export default function MainLayout() {
-  const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem(STORAGE_KEY) === "true"
-  );
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, String(collapsed));
-  }, [collapsed]);
-
   return (
     <div className="min-h-screen bg-slate-50 print:bg-white">
-      <Sidebar
-        role="client"
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((prev) => !prev)}
-      />
+      <Sidebar role="client" />
 
-      <Header role="client" collapsed={collapsed} />
+      <Header role="client" />
 
-      <div
-        className={`pt-16 transition-all duration-300 print:pt-0 print:pl-0 ${
-          collapsed ? "md:pl-20" : "md:pl-[280px]"
-        }`}
-      >
+      <div className="app-content min-h-screen bg-slate-50 pt-16 print:pt-0">
         <Outlet />
       </div>
     </div>

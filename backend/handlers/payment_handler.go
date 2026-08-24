@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
+	"billing-reminder-system/middleware"
 	"billing-reminder-system/models"
 	"billing-reminder-system/services"
 
@@ -25,16 +27,9 @@ func NewPaymentHandler(service *services.PaymentService, authService *services.A
 }
 
 func (h *PaymentHandler) GetPaymentsByClientID(w http.ResponseWriter, r *http.Request) {
-	authHeader := r.Header.Get("Authorization")
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		http.Error(w, "Token tidak ditemukan", http.StatusUnauthorized)
-		return
-	}
-	token := strings.TrimPrefix(authHeader, "Bearer ")
-
-	profile, err := h.AuthService.GetProfileByToken(token)
-	if err != nil {
-		http.Error(w, "Token tidak valid", http.StatusUnauthorized)
+	profile := middleware.ProfileFromContext(r)
+	if profile == nil {
+		http.Error(w, "Belum terautentikasi", http.StatusUnauthorized)
 		return
 	}
 
@@ -43,13 +38,15 @@ func (h *PaymentHandler) GetPaymentsByClientID(w http.ResponseWriter, r *http.Re
 		if err == pgx.ErrNoRows {
 			http.Error(w, "Client tidak ditemukan", http.StatusNotFound)
 		} else {
-			http.Error(w, "Gagal memverifikasi client: "+err.Error(), http.StatusInternalServerError)
+			log.Printf("GetPaymentsByClientID: gagal memverifikasi client %s: %v", profile.ID, err)
+			http.Error(w, "Gagal memverifikasi client", http.StatusInternalServerError)
 		}
 		return
 	}
 
 	payments, err := h.Service.GetPaymentsByClientID(client.ID)
 	if err != nil {
+		log.Printf("GetPaymentsByClientID: %v", err)
 		http.Error(w, "Gagal mengambil data pembayaran", http.StatusInternalServerError)
 		return
 	}
@@ -60,9 +57,31 @@ func (h *PaymentHandler) GetPaymentsByClientID(w http.ResponseWriter, r *http.Re
 
 func (h *PaymentHandler) GetPaymentByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	profile := middleware.ProfileFromContext(r)
+
+	// CLIENT hanya boleh melihat payment miliknya sendiri.
+	if profile != nil && profile.Role == models.RoleClient {
+		client, err := h.Service.GetClientByProfileID(profile.ID)
+		if err != nil {
+			http.Error(w, "Client tidak ditemukan", http.StatusNotFound)
+			return
+		}
+
+		owned, err := h.Service.PaymentBelongsToClient(r.Context(), id, client.ID)
+		if err != nil {
+			log.Printf("PaymentBelongsToClient: %v", err)
+			http.Error(w, "Gagal mengambil pembayaran", http.StatusInternalServerError)
+			return
+		}
+		if !owned {
+			http.Error(w, "Pembayaran tidak ditemukan", http.StatusNotFound)
+			return
+		}
+	}
 
 	payment, err := h.Service.GetPaymentByID(id)
 	if err != nil {
+		log.Printf("GetPaymentByID: %v", err)
 		http.Error(w, "Gagal mengambil pembayaran", http.StatusInternalServerError)
 		return
 	}
@@ -75,16 +94,128 @@ func (h *PaymentHandler) GetPaymentByID(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(payment)
 }
 
+func (h *PaymentHandler) GetPayments(w http.ResponseWriter, r *http.Request) {
+	payments, err := h.Service.GetPayments(r.Context())
+	if err != nil {
+		http.Error(w, "Gagal mengambil data pembayaran", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(payments)
+}
+
+func (h *PaymentHandler) ApprovePayment(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var req models.ApprovePaymentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Format JSON tidak valid", http.StatusBadRequest)
+		return
+	}
+
+	// verified_by diambil dari identitas terautentikasi, bukan dari body.
+	if profile := middleware.ProfileFromContext(r); profile != nil {
+		req.VerifiedBy = &profile.ID
+	}
+
+	payment, err := h.Service.ApprovePayment(r.Context(), id, req)
+	if err != nil {
+		message := err.Error()
+
+		if strings.Contains(message, "tidak ditemukan") {
+			http.Error(w, message, http.StatusNotFound)
+			return
+		}
+
+		if strings.Contains(message, "sudah") {
+			http.Error(w, message, http.StatusConflict)
+			return
+		}
+
+		log.Printf("ApprovePayment %s: %v", id, err)
+		http.Error(w, "Gagal menyetujui pembayaran", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(payment)
+}
+
+func (h *PaymentHandler) RejectPayment(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var req models.RejectPaymentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Format JSON tidak valid", http.StatusBadRequest)
+		return
+	}
+
+	// verified_by diambil dari identitas terautentikasi, bukan dari body.
+	if profile := middleware.ProfileFromContext(r); profile != nil {
+		req.VerifiedBy = &profile.ID
+	}
+
+	payment, err := h.Service.RejectPayment(r.Context(), id, req)
+	if err != nil {
+		message := err.Error()
+
+		if strings.Contains(message, "tidak ditemukan") {
+			http.Error(w, message, http.StatusNotFound)
+			return
+		}
+
+		if strings.Contains(message, "sudah") {
+			http.Error(w, message, http.StatusConflict)
+			return
+		}
+
+		log.Printf("RejectPayment %s: %v", id, err)
+		http.Error(w, "Gagal menolak pembayaran", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(payment)
+}
+
 func (h *PaymentHandler) CreatePayment(w http.ResponseWriter, r *http.Request) {
+	profile := middleware.ProfileFromContext(r)
+	if profile == nil {
+		http.Error(w, "Belum terautentikasi", http.StatusUnauthorized)
+		return
+	}
+
 	var req models.CreatePaymentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Format JSON tidak valid", http.StatusBadRequest)
 		return
 	}
 
+	// CLIENT hanya boleh membuat payment untuk invoice miliknya sendiri.
+	client, err := h.Service.GetClientByProfileID(profile.ID)
+	if err != nil {
+		http.Error(w, "Client tidak ditemukan", http.StatusNotFound)
+		return
+	}
+
+	if profile.Role == models.RoleClient {
+		owned, err := h.Service.InvoiceBelongsToClient(r.Context(), req.InvoiceID, client.ID)
+		if err != nil {
+			log.Printf("InvoiceBelongsToClient: %v", err)
+			http.Error(w, "Gagal memvalidasi invoice", http.StatusInternalServerError)
+			return
+		}
+		if !owned {
+			http.Error(w, "Invoice tidak ditemukan", http.StatusForbidden)
+			return
+		}
+	}
+
 	payment, err := h.Service.CreatePayment(req)
 	if err != nil {
-		http.Error(w, "Gagal membuat pembayaran: "+err.Error(), http.StatusInternalServerError)
+		log.Printf("CreatePayment: %v", err)
+		http.Error(w, "Gagal membuat pembayaran", http.StatusInternalServerError)
 		return
 	}
 

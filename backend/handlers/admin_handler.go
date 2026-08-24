@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
+	"strings"
 
 	"billing-reminder-system/models"
 	"billing-reminder-system/services"
@@ -42,7 +44,12 @@ func (h *AdminHandler) CreateAdmin(w http.ResponseWriter, r *http.Request) {
 
 	admin, err := h.Service.CreateAdmin(req)
 	if err != nil {
-		http.Error(w, "Gagal membuat admin: "+err.Error(), http.StatusInternalServerError)
+		if strings.Contains(err.Error(), "sudah terdaftar") {
+			http.Error(w, "Email sudah terdaftar", http.StatusConflict)
+			return
+		}
+		log.Printf("CreateAdmin %s: %v", req.Email, err)
+		http.Error(w, "Gagal membuat admin", http.StatusInternalServerError)
 		return
 	}
 

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"billing-reminder-system/models"
@@ -121,6 +122,11 @@ func (s *AdminService) CreateAdmin(req models.CreateAdminRequest) (*models.Admin
 		var errorResponse map[string]interface{}
 		json.NewDecoder(resp.Body).Decode(&errorResponse)
 
+		msg, _ := errorResponse["msg"].(string)
+		if strings.Contains(strings.ToLower(msg), "already been registered") {
+			return nil, fmt.Errorf("email sudah terdaftar")
+		}
+
 		return nil, fmt.Errorf("gagal membuat user auth: %v", errorResponse)
 	}
 
@@ -132,15 +138,16 @@ func (s *AdminService) CreateAdmin(req models.CreateAdminRequest) (*models.Admin
 		return nil, err
 	}
 
-	// Masukkan user ke profiles
+	// Profil sudah dibuat otomatis oleh trigger handle_new_user di Supabase
+	// saat user auth dibuat (pola yang sama dipakai AuthService.Register).
+	// Cukup promosikan profil tersebut menjadi ADMIN.
 	query := `
-		INSERT INTO profiles (
-			id,
-			full_name,
-			phone,
-			role
-		)
-		VALUES ($1, $2, $3, 'ADMIN')
+		UPDATE profiles SET
+			full_name = $2,
+			phone = $3,
+			role = 'ADMIN',
+			updated_at = NOW()
+		WHERE id = $1
 		RETURNING
 			id,
 			full_name,

@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
+	"billing-reminder-system/middleware"
 	"billing-reminder-system/models"
 	"billing-reminder-system/services"
 
@@ -25,16 +27,9 @@ func NewInvoiceHandler(service *services.InvoiceService, authService *services.A
 }
 
 func (h *InvoiceHandler) GetInvoicesByClientID(w http.ResponseWriter, r *http.Request) {
-	authHeader := r.Header.Get("Authorization")
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		http.Error(w, "Token tidak ditemukan", http.StatusUnauthorized)
-		return
-	}
-	token := strings.TrimPrefix(authHeader, "Bearer ")
-
-	profile, err := h.AuthService.GetProfileByToken(token)
-	if err != nil {
-		http.Error(w, "Token tidak valid", http.StatusUnauthorized)
+	profile := middleware.ProfileFromContext(r)
+	if profile == nil {
+		http.Error(w, "Belum terautentikasi", http.StatusUnauthorized)
 		return
 	}
 
@@ -43,12 +38,25 @@ func (h *InvoiceHandler) GetInvoicesByClientID(w http.ResponseWriter, r *http.Re
 		if err == pgx.ErrNoRows {
 			http.Error(w, "Client tidak ditemukan", http.StatusNotFound)
 		} else {
-			http.Error(w, "Gagal memverifikasi client: "+err.Error(), http.StatusInternalServerError)
+			log.Printf("GetInvoicesByClientID: gagal memverifikasi client %s: %v", profile.ID, err)
+			http.Error(w, "Gagal memverifikasi client", http.StatusInternalServerError)
 		}
 		return
 	}
 
 	invoices, err := h.Service.GetInvoicesByClientID(client.ID)
+	if err != nil {
+		log.Printf("GetInvoicesByClientID: %v", err)
+		http.Error(w, "Gagal mengambil data invoice", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(invoices)
+}
+
+func (h *InvoiceHandler) GetInvoices(w http.ResponseWriter, r *http.Request) {
+	invoices, err := h.Service.GetInvoices()
 	if err != nil {
 		http.Error(w, "Gagal mengambil data invoice", http.StatusInternalServerError)
 		return
@@ -60,9 +68,34 @@ func (h *InvoiceHandler) GetInvoicesByClientID(w http.ResponseWriter, r *http.Re
 
 func (h *InvoiceHandler) GetInvoiceByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	profile := middleware.ProfileFromContext(r)
+
+	// CLIENT hanya boleh membuka invoice miliknya sendiri.
+	if profile != nil && profile.Role == models.RoleClient {
+		client, err := h.Service.GetClientByProfileID(profile.ID)
+		if err != nil {
+			http.Error(w, "Client tidak ditemukan", http.StatusNotFound)
+			return
+		}
+
+		invoice, err := h.Service.GetInvoiceByID(id)
+		if err != nil {
+			log.Printf("GetInvoiceByID: %v", err)
+			http.Error(w, "Gagal mengambil invoice", http.StatusInternalServerError)
+			return
+		}
+		if invoice == nil || invoice.ClientID != client.ID {
+			http.Error(w, "Invoice tidak ditemukan", http.StatusNotFound)
+			return
+		}
+
+		h.serveInvoiceDetail(w, invoice)
+		return
+	}
 
 	invoice, err := h.Service.GetInvoiceByID(id)
 	if err != nil {
+		log.Printf("GetInvoiceByID: %v", err)
 		http.Error(w, "Gagal mengambil invoice", http.StatusInternalServerError)
 		return
 	}
@@ -71,19 +104,22 @@ func (h *InvoiceHandler) GetInvoiceByID(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	h.serveInvoiceDetail(w, invoice)
+}
+
+func (h *InvoiceHandler) serveInvoiceDetail(w http.ResponseWriter, invoice *models.Invoice) {
 	timeline, err := h.Service.GetInvoiceTimeline(invoice)
 	if err != nil {
+		log.Printf("GetInvoiceTimeline: %v", err)
 		http.Error(w, "Gagal mengambil timeline", http.StatusInternalServerError)
 		return
 	}
 
-	response := map[string]interface{}{
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
 		"invoice":  invoice,
 		"timeline": timeline,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	})
 }
 
 func (h *InvoiceHandler) CreateInvoice(w http.ResponseWriter, r *http.Request) {
@@ -93,9 +129,15 @@ func (h *InvoiceHandler) CreateInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// created_by selalu diambil dari identitas terautentikasi, bukan body.
+	if profile := middleware.ProfileFromContext(r); profile != nil {
+		req.CreatedBy = &profile.ID
+	}
+
 	invoice, err := h.Service.CreateInvoice(req)
 	if err != nil {
-		http.Error(w, "Gagal membuat invoice: "+err.Error(), http.StatusInternalServerError)
+		log.Printf("CreateInvoice: %v", err)
+		http.Error(w, "Gagal membuat invoice", http.StatusInternalServerError)
 		return
 	}
 
@@ -120,6 +162,33 @@ func (h *InvoiceHandler) UpdateInvoice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(invoice)
+}
+
+func (h *InvoiceHandler) SendInvoice(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	invoice, err := h.Service.SendInvoice(id)
+
+	if err != nil {
+		message := err.Error()
+
+		if strings.Contains(message, "ditemukan") {
+			http.Error(w, message, http.StatusNotFound)
+			return
+		}
+
+		if strings.Contains(message, "hanya invoice") {
+			http.Error(w, message, http.StatusBadRequest)
+			return
+		}
+
+		http.Error(w, message, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
 	json.NewEncoder(w).Encode(invoice)
 }
 

@@ -284,7 +284,7 @@ export default function ProductManagement() {
     ) : null;
 
   return (
-    <div className="min-h-screen bg-[#fcf8ff] pt-16 md:pl-[280px]">
+    <div className="min-h-screen bg-[#fcf8ff] pt-16 app-content">
       <Sidebar />
       <Header role="superadmin" />
 

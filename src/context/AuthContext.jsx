@@ -42,6 +42,24 @@ export function AuthProvider({ children }) {
     };
 
     init();
+
+    // Listener sesi: access token selalu segar setelah auto-refresh,
+    // dan state dibersihkan saat logout dari tab mana pun.
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "TOKEN_REFRESHED" && session) {
+        setAccessToken(session.access_token);
+      }
+
+      if (event === "SIGNED_OUT") {
+        setUser(null);
+        setClient(null);
+        setAccessToken(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const signIn = async (email, password, remember) => {

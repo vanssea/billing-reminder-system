@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
+import { useAuth } from "../../context/AuthContext";
 import {
   Search,
   Plus,
@@ -64,6 +65,7 @@ function FieldError({ field, errors }) {
 }
 
 export default function AdminManagement() {
+  const { accessToken } = useAuth();
   const [admins, setAdmins] = useState([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -84,7 +86,7 @@ export default function AdminManagement() {
       setLoading(true);
       setError("");
 
-      const data = await getAdmins();
+      const data = await getAdmins(accessToken);
       setAdmins(data || []);
     } catch (err) {
       console.error(err);
@@ -189,7 +191,7 @@ export default function AdminManagement() {
           full_name: form.full_name,
           role: "ADMIN",
           phone: form.phone || null,
-        });
+        }, accessToken);
         setSuccess("Data admin berhasil diperbarui.");
       } else {
         await createAdmin({
@@ -197,7 +199,7 @@ export default function AdminManagement() {
           email: form.email,
           password: form.password,
           phone: form.phone || null,
-        });
+        }, accessToken);
         setSuccess("Admin baru berhasil ditambahkan.");
       }
 
@@ -219,7 +221,7 @@ export default function AdminManagement() {
       setError("");
       setSuccess("");
 
-      await deleteAdmin(deleteTarget.id);
+      await deleteAdmin(deleteTarget.id, accessToken);
 
       setAdmins((prev) =>
         prev.filter((item) => item.id !== deleteTarget.id)
@@ -252,7 +254,7 @@ export default function AdminManagement() {
       .toUpperCase() || "?";
 
   return (
-    <div className="min-h-screen bg-[#fcf8ff] pt-16 md:pl-[280px]">
+    <div className="min-h-screen bg-[#fcf8ff] pt-16 app-content">
       <Sidebar />
       <Header role="superadmin" />
 

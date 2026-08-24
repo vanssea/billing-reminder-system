@@ -2,12 +2,25 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
+	"net/mail"
 	"strings"
 
 	"billing-reminder-system/models"
 	"billing-reminder-system/services"
 )
+
+// isValidEmail memvalidasi format email dengan parser standar.
+func isValidEmail(email string) bool {
+	address, err := mail.ParseAddress(email)
+	if err != nil {
+		return false
+	}
+	// ParseAddress menerima format "Nama <email@domain>"; pastikan input
+	// benar-benar hanya alamat email.
+	return strings.EqualFold(address.Address, email)
+}
 
 type AuthHandler struct {
 	Service *services.AuthService
@@ -36,7 +49,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !strings.Contains(req.Email, "@") {
+	if !isValidEmail(req.Email) {
 		http.Error(w, "Format email tidak valid", http.StatusBadRequest)
 		return
 	}
@@ -49,12 +62,16 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	profile, err := h.Service.Register(req)
 	if err != nil {
 		status := http.StatusInternalServerError
+		message := "Gagal melakukan registrasi"
 
 		if strings.Contains(err.Error(), "sudah terdaftar") {
 			status = http.StatusConflict
+			message = "Email sudah terdaftar"
+		} else {
+			log.Printf("Register %s: %v", req.Email, err)
 		}
 
-		http.Error(w, err.Error(), status)
+		http.Error(w, message, status)
 		return
 	}
 

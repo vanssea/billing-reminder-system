@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import { getSuperAdminDashboard } from "../../services/dashboardService";
+import { useAuth } from "../../context/AuthContext";
 import {
   Users,
   ShieldCheck,
@@ -540,6 +541,7 @@ function InvoiceStatusCard({ invoiceStatus }) {
 
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
+  const { accessToken } = useAuth();
   const [activePeriod, setActivePeriod] = useState("7 Days");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -553,7 +555,7 @@ export default function SuperAdminDashboard() {
         setLoading(true);
         setError(null);
 
-        const result = await getSuperAdminDashboard();
+        const result = await getSuperAdminDashboard(accessToken);
 
         if (!cancelled) {
           setData(result);
@@ -574,7 +576,7 @@ export default function SuperAdminDashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [accessToken]);
 
   // Tidak ada fallback diam-diam: jika backend tidak mengirim data untuk
   // periode yang dipilih, tampilkan empty state (bukan periode lain).
@@ -599,7 +601,7 @@ export default function SuperAdminDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 md:pl-[280px]">
+      <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 app-content">
         <Sidebar />
         <Header role="superadmin" />
 
@@ -620,7 +622,7 @@ export default function SuperAdminDashboard() {
 
   if (error || !data) {
     return (
-      <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 md:pl-[280px]">
+      <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 app-content">
         <Sidebar />
         <Header role="superadmin" />
 
@@ -709,7 +711,7 @@ export default function SuperAdminDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 md:pl-[280px]">
+    <div className="min-h-screen bg-slate-50 pt-16 text-slate-900 app-content">
       <Sidebar />
       <Header role="superadmin" />
 
