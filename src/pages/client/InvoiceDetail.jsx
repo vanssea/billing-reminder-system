@@ -69,18 +69,18 @@ export default function InvoiceDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { client } = useAuth();
+  const { client, accessToken } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!client || !id) return;
+    if (!client || !accessToken || !id) return;
 
     const fetchData = async () => {
       try {
         setLoading(true);
-        const result = await getClientInvoiceById(id, client.id);
+        const result = await getClientInvoiceById(id, accessToken);
         setData(result);
       } catch (err) {
         setError("Gagal memuat detail invoice");
@@ -90,7 +90,7 @@ export default function InvoiceDetail() {
     };
 
     fetchData();
-  }, [client, id]);
+  }, [client, accessToken, id]);
 
   useEffect(() => {
     if (location.state?.print && data?.invoice) {
