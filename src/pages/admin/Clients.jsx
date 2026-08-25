@@ -94,7 +94,7 @@ export default function AdminClients() {
 
   const loadClients = async () => {
     try {
-      const data = await fetchClients();
+      const data = await fetchClients(accessToken);
       setClients(data);
     } catch (err) {
       console.error(err);
