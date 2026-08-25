@@ -15,25 +15,31 @@ func whatsappReady(wa *WhatsAppService) bool {
 
 // SendInvoiceCreatedWhatsApp mengirim pesan teks + PDF invoice ke client
 // saat invoice pertama kali dibuat dengan status SENT.
+// Wrapper fire-and-forget untuk alur otomatis (create/update invoice).
 func SendInvoiceCreatedWhatsApp(db *pgxpool.Pool, wa *WhatsAppService, pdf *PDFService, invoiceID string) {
+	if err := SendInvoiceToClient(db, wa, pdf, invoiceID); err != nil {
+		log.Printf("Invoice WhatsApp otomatis gagal untuk %s: %v", invoiceID, err)
+	}
+}
+
+// SendInvoiceToClient mengirim pesan teks + PDF invoice ke nomor WhatsApp
+// client secara sinkron dan mengembalikan error bila ada langkah yang
+// gagal, sehingga pemanggil bisa melaporkan hasil yang sebenarnya.
+func SendInvoiceToClient(db *pgxpool.Pool, wa *WhatsAppService, pdf *PDFService, invoiceID string) error {
 	if !whatsappReady(wa) {
-		log.Printf("Invoice WhatsApp dilewati untuk %s: WhatsApp belum terhubung", invoiceID)
-		return
+		return fmt.Errorf("whatsapp belum terhubung")
 	}
 	if pdf == nil {
-		log.Printf("Invoice WhatsApp gagal untuk %s: PDF service tidak tersedia", invoiceID)
-		return
+		return fmt.Errorf("pdf service tidak tersedia")
 	}
 
 	inv, err := getInvoiceData(context.Background(), db, invoiceID)
 	if err != nil {
-		log.Printf("Invoice WhatsApp gagal untuk %s: %v", invoiceID, err)
-		return
+		return fmt.Errorf("gagal ambil data invoice: %v", err)
 	}
 
 	if strings.TrimSpace(inv.ClientPhone) == "" {
-		log.Printf("Invoice WhatsApp dilewati untuk %s: client %s tidak memiliki nomor telepon", inv.InvoiceNumber, inv.ClientCompany)
-		return
+		return fmt.Errorf("client %s tidak memiliki nomor whatsapp", inv.ClientCompany)
 	}
 
 	message := fmt.Sprintf(`🔔 *Tagihan Baru*
@@ -57,22 +63,23 @@ Terima kasih.
 
 	if err := wa.Send(inv.ClientPhone, message); err != nil {
 		log.Printf("Invoice WhatsApp gagal terkirim untuk %s ke %s: %v", inv.InvoiceNumber, inv.ClientPhone, err)
-		return
+		return fmt.Errorf("gagal kirim pesan whatsapp: %v", err)
 	}
 	log.Printf("Invoice WhatsApp teks terkirim untuk %s ke %s", inv.InvoiceNumber, inv.ClientPhone)
 
 	pdfBytes, err := pdf.RenderInvoicePDF(inv)
 	if err != nil {
 		log.Printf("Invoice WhatsApp: teks terkirim tapi gagal generate PDF untuk %s: %v", inv.InvoiceNumber, err)
-		return
+		return fmt.Errorf("pesan teks terkirim tetapi gagal membuat PDF invoice: %v", err)
 	}
 
 	fileName := "Invoice-" + strings.ReplaceAll(inv.InvoiceNumber, "/", "-") + ".pdf"
 	if err := wa.SendDocument(inv.ClientPhone, fileName, pdfBytes); err != nil {
 		log.Printf("Invoice WhatsApp: teks terkirim tapi gagal kirim PDF untuk %s: %v", inv.InvoiceNumber, err)
-		return
+		return fmt.Errorf("pesan teks terkirim tetapi gagal mengirim PDF: %v", err)
 	}
 	log.Printf("Invoice WhatsApp PDF terkirim untuk %s ke %s", inv.InvoiceNumber, inv.ClientPhone)
+	return nil
 }
 
 type paymentNotification struct {
@@ -208,6 +215,9 @@ Terima kasih.
 // OVERDUE lalu mengirim notifikasi WhatsApp satu kali untuk setiap invoice
 // yang BARU berubah status. Invoice yang sudah OVERDUE pada run berikutnya
 // tidak lagi cocok dengan filter, sehingga pesan tidak pernah duplikat.
+// Reminder milik invoice yang baru OVERDUE dan belum terkirim (PENDING/FAILED,
+// sent_at NULL) langsung di-SKIPPED dalam statement yang sama sehingga tidak
+// ada reminder menggantung; reminder SENT tidak disentuh.
 func (s *ReminderService) processOverdueInvoices(ctx context.Context) {
 	rows, err := s.DB.Query(ctx, `
 		WITH overdue AS (
@@ -216,6 +226,14 @@ func (s *ReminderService) processOverdueInvoices(ctx context.Context) {
 			WHERE due_date < NOW()
 			  AND status IN ('UNPAID', 'SENT')
 			RETURNING id, client_id
+		),
+		skip_reminders AS (
+			UPDATE reminders r
+			SET status = 'SKIPPED'
+			FROM overdue o
+			WHERE r.invoice_id = o.id
+			  AND r.sent_at IS NULL
+			  AND r.status IN ('PENDING', 'FAILED')
 		)
 		SELECT o.id, COALESCE(c.phone, '')
 		FROM overdue o

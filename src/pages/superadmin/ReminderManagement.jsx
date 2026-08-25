@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { getReminders, retryReminder } from "../../services/reminderApi";
+import { useAuth } from "../../context/AuthContext";
 
 /* =========================================================
    CONFIG
@@ -64,6 +65,7 @@ const formatDateTime = (v) =>
 ========================================================= */
 
 export default function ReminderManagement() {
+  const { accessToken } = useAuth();
   const [reminders, setReminders] = useState([]);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
@@ -78,7 +80,7 @@ export default function ReminderManagement() {
     try {
       setLoading(true);
       setError("");
-      const data = await getReminders();
+      const data = await getReminders(accessToken);
       setReminders(data || []);
     } catch (err) {
       console.error(err);
@@ -133,7 +135,7 @@ export default function ReminderManagement() {
   const handleRetry = async (reminder) => {
     try {
       setError("");
-      await retryReminder(reminder.id);
+      await retryReminder(reminder.id, accessToken);
       setSelectedReminder(null);
       showSuccess("Reminder dimasukkan kembali ke antrean.");
       await loadReminders();
@@ -144,7 +146,7 @@ export default function ReminderManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fcf8ff] pt-16 md:pl-[280px]">
+    <div className="min-h-screen bg-[#fcf8ff] pt-16 app-content">
       <Sidebar />
       <Header role="superadmin" />
       <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">

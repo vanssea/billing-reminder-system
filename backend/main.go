@@ -40,17 +40,14 @@ func main() {
 	faqService := services.NewFAQService(db)
 	authService := services.NewAuthService(db, clientService)
 	invoiceService := services.NewInvoiceService(db, clientService)
-	paymentService := services.NewPaymentService(db, clientService)
-	purchaseService := services.NewPurchaseService(db, clientService, productService)
-	authService := services.NewAuthService(db)
-	invoiceService := services.NewInvoiceService(db)
 	invoiceService.WhatsApp = waService
 	invoiceService.PDF = pdfService
+	paymentService := services.NewPaymentService(db, clientService)
+	paymentService.WhatsApp = waService
+	purchaseService := services.NewPurchaseService(db, clientService, productService)
 	reminderService := services.NewReminderService(db)
 	reminderService.WhatsApp = waService
 	reminderService.PDF = pdfService
-	paymentService := services.NewPaymentService(db)
-	paymentService.WhatsApp = waService
 	appNotificationService := services.NewAppNotificationService(db)
 
 	// Membuat handler
@@ -63,11 +60,9 @@ func main() {
 	invoiceHandler := handlers.NewInvoiceHandler(invoiceService, authService)
 	paymentHandler := handlers.NewPaymentHandler(paymentService, authService)
 	purchaseHandler := handlers.NewPurchaseHandler(purchaseService, authService)
-	invoiceHandler := handlers.NewInvoiceHandler(invoiceService)
 	reminderHandler := handlers.NewReminderHandler(reminderService)
-	paymentHandler := handlers.NewPaymentHandler(paymentService)
 	whatsappHandler := handlers.NewWhatsAppHandler(waService, pdfService)
-	appNotificationHandler := handlers.NewAppNotificationHandler(appNotificationService)
+	appNotificationHandler := handlers.NewAppNotificationHandler(appNotificationService, authService)
 
 	// Setup router
 	router := chi.NewRouter()
@@ -97,22 +92,22 @@ func main() {
 	}))
 
 	// Routes
-	routes.ClientProfileRoutes(router, clientHandler)
-	routes.ClientRoutes(router, clientHandler)
-	routes.AdminRoutes(router, adminHandler)
-	routes.ProductRoutes(router, productHandler)
-	routes.TestimonialRoutes(router, testimonialHandler)
-	routes.FAQRoutes(router, faqHandler)
+	routes.ClientProfileRoutes(router, clientHandler, authService)
+	routes.ClientRoutes(router, clientHandler, authService)
+	routes.AdminRoutes(router, adminHandler, authService)
+	routes.ProductRoutes(router, productHandler, authService)
+	routes.TestimonialRoutes(router, testimonialHandler, authService)
+	routes.FAQRoutes(router, faqHandler, authService)
 	routes.AuthRoutes(router, authHandler)
-	routes.ClientInvoiceRoutes(router, invoiceHandler)
-	routes.ClientPaymentRoutes(router, paymentHandler)
-	routes.ClientPurchaseRoutes(router, purchaseHandler)
-	routes.AdminPurchaseRoutes(router, purchaseHandler)
-	routes.InvoiceRoutes(router, invoiceHandler)
-	routes.ReminderRoutes(router, reminderHandler)
-	routes.PaymentRoutes(router, paymentHandler)
-	routes.WhatsAppRoutes(router, whatsappHandler)
-	routes.AppNotificationRoutes(router, appNotificationHandler)
+	routes.ClientInvoiceRoutes(router, invoiceHandler, authService)
+	routes.ClientPaymentRoutes(router, paymentHandler, authService)
+	routes.ClientPurchaseRoutes(router, purchaseHandler, authService)
+	routes.AdminPurchaseRoutes(router, purchaseHandler, authService)
+	routes.InvoiceRoutes(router, invoiceHandler, authService)
+	routes.ReminderRoutes(router, reminderHandler, authService)
+	routes.PaymentRoutes(router, paymentHandler, authService)
+	routes.WhatsAppRoutes(router, whatsappHandler, authService)
+	routes.AppNotificationRoutes(router, appNotificationHandler, authService)
 
 	// Menjalankan scheduler reminder di background (H-30 s/d H-1 + overdue)
 	go reminderService.StartReminderScheduler(context.Background())

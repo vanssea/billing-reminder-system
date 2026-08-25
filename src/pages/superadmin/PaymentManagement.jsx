@@ -154,7 +154,7 @@ function SectionTitle({ icon: Icon, children }) {
 }
 
 export default function PaymentManagement() {
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const verifierName = user?.full_name || "Superadmin";
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -172,7 +172,7 @@ export default function PaymentManagement() {
   const loadPayments = useCallback(async () => {
     try {
       setLoading(true);
-      const rows = await getPayments();
+      const rows = await getPayments(accessToken);
       setPayments(rows.map(mapPayment));
       setError("");
     } catch (err) {
@@ -180,7 +180,7 @@ export default function PaymentManagement() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [accessToken]);
 
   useEffect(() => {
     loadPayments();
@@ -287,7 +287,7 @@ export default function PaymentManagement() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#fcf8ff] pt-16 md:pl-[280px]">
+    <div className="min-h-screen bg-[#fcf8ff] pt-16 app-content">
       <Sidebar />
       <Header role="superadmin" />
 

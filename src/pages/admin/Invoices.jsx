@@ -4,7 +4,7 @@ import {
   CheckCircle2, Clock, AlertTriangle, Users, Loader2,
   Plus, Pencil, Trash2, ArrowDown, ArrowUp, Send, XCircle,
 } from "lucide-react";
-import { getInvoices, getInvoiceById, createInvoice, updateInvoice, deleteInvoice } from "../../services/invoiceApi";
+import { getInvoices, getInvoiceById, createInvoice, updateInvoice, deleteInvoice, sendInvoice } from "../../services/invoiceApi";
 import { getClients } from "../../services/clientApi";
 import { getProducts } from "../../services/productApi";
 import InvoiceTemplate from "../../components/invoice/InvoiceTemplate";
@@ -44,7 +44,7 @@ export default function AdminInvoices() {
   const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const isSuperadmin = user?.role === "SUPERADMIN";
   const [sortOrder, setSortOrder] = useState("desc");
   const [detailTarget, setDetailTarget] = useState(null);
@@ -68,14 +68,14 @@ export default function AdminInvoices() {
         setLoading(true);
         setError("");
         const [invData, cliData, prdData] = await Promise.all([
-          getInvoices(), getClients(1, 1000), getProducts(),
+          getInvoices(accessToken), getClients(1, 1000, undefined, undefined, accessToken), getProducts(),
         ]);
         if (!ignore) { setClients((cliData && cliData.data) || cliData || []); setInvoices(invData); setProducts(prdData); }
       } catch (err) { if (!ignore) setError(err.message || "Gagal memuat data"); }
       finally { if (!ignore) setLoading(false); }
     })();
     return () => { ignore = true; };
-  }, []);
+  }, [accessToken]);
 
   useEffect(() => {
     document.body.style.overflow = detailTarget || modalOpen || deleteTarget || sendTarget || cancelTarget ? "hidden" : "";
@@ -133,6 +133,11 @@ export default function AdminInvoices() {
 
   const toDateInput = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "");
 
+  const fetchInvoiceDetail = async (id) => {
+    const res = await getInvoiceById(id, accessToken);
+    return res?.invoice ?? res;
+  };
+
   const openAdd = () => {
     setEditingId(null);
     setForm({
@@ -145,7 +150,7 @@ export default function AdminInvoices() {
 
   const openEdit = async (inv) => {
     try {
-      const detail = await getInvoiceById(inv.id);
+      const detail = await fetchInvoiceDetail(inv.id);
       setEditingId(inv.id);
       setForm({
         invoice_number: detail.invoice_number || "",
@@ -204,13 +209,13 @@ export default function AdminInvoices() {
         items: validItems.map((it) => ({ product_id: it.product_id, quantity: Number(it.quantity) || 1 })),
       };
       if (editingId) {
-        await updateInvoice(editingId, payload);
+        await updateInvoice(editingId, payload, accessToken);
       } else {
-        await createInvoice(payload);
+        await createInvoice(payload, accessToken);
       }
       setSuccess(editingId ? "Invoice berhasil diperbarui." : "Invoice berhasil ditambahkan.");
       setModalOpen(false);
-      const refreshed = await getInvoices();
+      const refreshed = await getInvoices(accessToken);
       setInvoices(refreshed);
     } catch (err) {
       setError(err.message || "Gagal menyimpan invoice");
@@ -223,7 +228,7 @@ export default function AdminInvoices() {
     if (!deleteTarget) return;
     setSaving(true);
     try {
-      await deleteInvoice(deleteTarget.id);
+      await deleteInvoice(deleteTarget.id, accessToken);
       setSuccess("Invoice berhasil dihapus.");
       setDeleteTarget(null);
       setInvoices((prev) => prev.filter((i) => i.id !== deleteTarget.id));
@@ -238,19 +243,16 @@ export default function AdminInvoices() {
     if (!sendTarget) return;
     setSaving(true);
     try {
-      await updateInvoice(sendTarget.id, {
-        ...sendTarget,
-        status: "SENT",
-        invoice_date: sendTarget.invoice_date,
-        due_date: sendTarget.due_date,
-        items: (sendTarget.items || []).map((it) => ({ product_id: it.product_id, quantity: it.quantity })),
-      });
-      setSuccess(`Invoice ${sendTarget.invoice_number} berhasil dikirim.`);
+      await sendInvoice(sendTarget.id, accessToken);
+      setSuccess(`Invoice ${sendTarget.invoice_number} berhasil dikirim ke WhatsApp client.`);
       setSendTarget(null);
-      const refreshed = await getInvoices();
+      const refreshed = await getInvoices(accessToken);
       setInvoices(refreshed);
     } catch (err) {
       setError(err.message || "Gagal mengirim invoice");
+      setSendTarget(null);
+      const refreshed = await getInvoices(accessToken);
+      setInvoices(refreshed);
     } finally {
       setSaving(false);
     }
@@ -269,10 +271,10 @@ export default function AdminInvoices() {
         notes: cancelTarget.notes || null,
         created_by: cancelTarget.created_by || null,
         items: (cancelTarget.items || []).map((it) => ({ product_id: it.product_id, quantity: it.quantity })),
-      });
+      }, accessToken);
       setSuccess(`Invoice ${cancelTarget.invoice_number} berhasil dibatalkan.`);
       setCancelTarget(null);
-      const refreshed = await getInvoices();
+      const refreshed = await getInvoices(accessToken);
       setInvoices(refreshed);
     } catch (err) {
       setError(err.message || "Gagal membatalkan invoice");
@@ -452,7 +454,7 @@ export default function AdminInvoices() {
                         <td className="px-4 py-3"><StatusBadge status={inv.status} /></td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
-                            <button type="button" onClick={async () => { try { const detail = await getInvoiceById(inv.id); setDetailTarget(detail); } catch (err) { setError(err.message); } }} title="Detail" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#3525cd]/10 text-[#3525cd] transition hover:bg-[#3525cd]/20">
+                            <button type="button" onClick={async () => { try { const detail = await fetchInvoiceDetail(inv.id); setDetailTarget(detail); } catch (err) { setError(err.message); } }} title="Detail" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#3525cd]/10 text-[#3525cd] transition hover:bg-[#3525cd]/20">
                               <Eye className="h-4 w-4" />
                             </button>
                             <button type="button" onClick={() => openEdit(inv)} title="Edit" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#f59e0b]/10 text-[#d97706] transition hover:bg-[#f59e0b]/20">

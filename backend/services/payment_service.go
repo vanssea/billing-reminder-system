@@ -2,10 +2,10 @@ package services
 
 import (
 	"context"
-	"strconv"
-	"strings"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"billing-reminder-system/models"
@@ -17,6 +17,7 @@ import (
 type PaymentService struct {
 	DB            *pgxpool.Pool
 	ClientService *ClientService
+	WhatsApp      *WhatsAppService
 }
 
 func NewPaymentService(db *pgxpool.Pool, clientService *ClientService) *PaymentService {
@@ -30,6 +31,35 @@ func (s *PaymentService) GetClientByProfileID(profileID string) (*models.Client,
 	return s.ClientService.GetClientByProfileID(profileID)
 }
 
+// InvoiceBelongsToClient memverifikasi bahwa invoice dimiliki oleh client
+// tertentu. Dipakai handler untuk ownership check CLIENT.
+func (s *PaymentService) InvoiceBelongsToClient(ctx context.Context, invoiceID, clientID string) (bool, error) {
+	var exists bool
+	err := s.DB.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM invoices i
+			JOIN clients c ON c.id = i.client_id
+			WHERE i.id = $1 AND c.id = $2
+		)
+	`, invoiceID, clientID).Scan(&exists)
+	return exists, err
+}
+
+// PaymentBelongsToClient memverifikasi bahwa payment terhubung ke invoice
+// milik client tertentu.
+func (s *PaymentService) PaymentBelongsToClient(ctx context.Context, paymentID, clientID string) (bool, error) {
+	var exists bool
+	err := s.DB.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM payments p
+			JOIN invoices i ON i.id = p.invoice_id
+			JOIN clients c ON c.id = i.client_id
+			WHERE p.id = $1 AND c.id = $2
+		)
+	`, paymentID, clientID).Scan(&exists)
+	return exists, err
+}
+
 func (s *PaymentService) GetPaymentsByClientID(clientID string) ([]models.Payment, error) {
 	// First get invoices for this client, then get payments for those invoices
 	query := `
@@ -37,13 +67,13 @@ func (s *PaymentService) GetPaymentsByClientID(clientID string) ([]models.Paymen
 			p.id,
 			p.invoice_id,
 			p.amount,
-			p.payment_date,
-			p.payment_method,
-			p.proof_url,
+			COALESCE(p.payment_date, p.created_at) AS payment_date,
+			COALESCE(p.payment_method, '') AS payment_method,
+			COALESCE(p.proof_url, '') AS proof_url,
 			p.status,
 			p.verified_by,
 			p.verified_at,
-			p.notes,
+			COALESCE(p.notes, '') AS notes,
 			p.created_at,
 			p.updated_at
 		FROM payments p
@@ -53,14 +83,46 @@ func (s *PaymentService) GetPaymentsByClientID(clientID string) ([]models.Paymen
 	`
 
 	rows, err := s.DB.Query(context.Background(), query, clientID)
-	DB       *pgxpool.Pool
-	WhatsApp *WhatsAppService
-}
-
-func NewPaymentService(db *pgxpool.Pool) *PaymentService {
-	return &PaymentService{
-		DB: db,
+	if err != nil {
+		return nil, err
 	}
+	defer rows.Close()
+
+	var payments []models.Payment
+
+	for rows.Next() {
+		var p models.Payment
+
+		err := rows.Scan(
+			&p.ID,
+			&p.InvoiceID,
+			&p.Amount,
+			&p.PaymentDate,
+			&p.PaymentMethod,
+			&p.ProofURL,
+			&p.Status,
+			&p.VerifiedBy,
+			&p.VerifiedAt,
+			&p.Notes,
+			&p.CreatedAt,
+			&p.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// Populate compatibility fields
+		p.PaymentID = p.ID
+		p.VerificationStatus = p.Status
+		p.RejectionReason = p.Notes
+		payments = append(payments, p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return payments, nil
 }
 
 const paymentDetailSelect = `
@@ -97,22 +159,6 @@ func (s *PaymentService) GetPayments(ctx context.Context) ([]models.PaymentDetai
 	}
 	defer rows.Close()
 
-	var payments []models.Payment
-	for rows.Next() {
-		var p models.Payment
-		err := rows.Scan(
-			&p.ID,
-			&p.InvoiceID,
-			&p.Amount,
-			&p.PaymentDate,
-			&p.PaymentMethod,
-			&p.ProofURL,
-			&p.Status,
-			&p.VerifiedBy,
-			&p.VerifiedAt,
-			&p.Notes,
-			&p.CreatedAt,
-			&p.UpdatedAt,
 	var payments []models.PaymentDetail
 
 	for rows.Next() {
@@ -137,13 +183,18 @@ func (s *PaymentService) GetPayments(ctx context.Context) ([]models.PaymentDetai
 		if err != nil {
 			return nil, err
 		}
-		// Populate compatibility fields
-		p.PaymentID = p.ID
-		p.VerificationStatus = p.Status
-		p.RejectionReason = p.Notes
-		payments = append(payments, p)
+		payments = append(payments, payment)
 	}
-	return payments, rows.Err()
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if payments == nil {
+		payments = []models.PaymentDetail{}
+	}
+
+	return payments, nil
 }
 
 func (s *PaymentService) GetPaymentByID(paymentID string) (*models.Payment, error) {
@@ -152,13 +203,13 @@ func (s *PaymentService) GetPaymentByID(paymentID string) (*models.Payment, erro
 			id,
 			invoice_id,
 			amount,
-			payment_date,
-			payment_method,
-			proof_url,
+			COALESCE(payment_date, created_at) AS payment_date,
+			COALESCE(payment_method, '') AS payment_method,
+			COALESCE(proof_url, '') AS proof_url,
 			status,
 			verified_by,
 			verified_at,
-			notes,
+			COALESCE(notes, '') AS notes,
 			created_at,
 			updated_at
 		FROM payments
@@ -193,6 +244,39 @@ func (s *PaymentService) GetPaymentByID(paymentID string) (*models.Payment, erro
 	return &p, nil
 }
 
+// getPaymentDetailByID mengembalikan payment yang sudah diperkaya dengan
+// invoice_number dan nama client (PaymentDetail) untuk kebutuhan alur admin.
+func (s *PaymentService) getPaymentDetailByID(ctx context.Context, id string) (*models.PaymentDetail, error) {
+	var payment models.PaymentDetail
+
+	err := s.DB.QueryRow(ctx, paymentDetailSelect+`
+		WHERE p.id = $1
+	`, id).Scan(
+		&payment.ID,
+		&payment.InvoiceID,
+		&payment.InvoiceNumber,
+		&payment.ClientName,
+		&payment.Amount,
+		&payment.PaymentDate,
+		&payment.PaymentMethod,
+		&payment.ProofURL,
+		&payment.Status,
+		&payment.VerifiedBy,
+		&payment.VerifiedAt,
+		&payment.Notes,
+		&payment.CreatedAt,
+		&payment.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("pembayaran tidak ditemukan")
+		}
+		return nil, err
+	}
+
+	return &payment, nil
+}
+
 func (s *PaymentService) CreatePayment(req models.CreatePaymentRequest) (*models.Payment, error) {
 	paymentDate, _ := time.Parse("2006-01-02", req.PaymentDate)
 
@@ -204,7 +288,7 @@ func (s *PaymentService) CreatePayment(req models.CreatePaymentRequest) (*models
 		RETURNING
 			id, invoice_id, amount, payment_date,
 			payment_method, proof_url, status,
-			verified_by, verified_at, notes,
+			verified_by, verified_at, COALESCE(notes, '') AS notes,
 			created_at, updated_at
 	`
 
@@ -284,7 +368,7 @@ func (s *PaymentService) UpdatePayment(paymentID string, req models.UpdatePaymen
 	setParts = append(setParts, "updated_at = now()")
 	args = append(args, paymentID)
 
-	query := "UPDATE payments SET " + strings.Join(setParts, ", ") + " WHERE id = $" + strconv.Itoa(argIdx) + " RETURNING id, invoice_id, amount, payment_date, payment_method, proof_url, status, verified_by, verified_at, notes, created_at, updated_at"
+	query := "UPDATE payments SET " + strings.Join(setParts, ", ") + " WHERE id = $" + strconv.Itoa(argIdx) + " RETURNING id, invoice_id, amount, COALESCE(payment_date, created_at) AS payment_date, COALESCE(payment_method, '') AS payment_method, COALESCE(proof_url, '') AS proof_url, status, verified_by, verified_at, COALESCE(notes, '') AS notes, created_at, updated_at"
 
 	var p models.Payment
 	err := s.DB.QueryRow(context.Background(), query, args...).Scan(
@@ -309,54 +393,9 @@ func (s *PaymentService) DeletePayment(paymentID string) error {
 	return err
 }
 
-		payments = append(payments, payment)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	if payments == nil {
-		payments = []models.PaymentDetail{}
-	}
-
-	return payments, nil
-}
-
 // ============================================================
-// GET PAYMENT BY ID
+// GET PAYMENT DETAIL BY ID
 // ============================================================
-
-func (s *PaymentService) GetPaymentByID(ctx context.Context, id string) (*models.PaymentDetail, error) {
-	var payment models.PaymentDetail
-
-	err := s.DB.QueryRow(ctx, paymentDetailSelect+`
-		WHERE p.id = $1
-	`, id).Scan(
-		&payment.ID,
-		&payment.InvoiceID,
-		&payment.InvoiceNumber,
-		&payment.ClientName,
-		&payment.Amount,
-		&payment.PaymentDate,
-		&payment.PaymentMethod,
-		&payment.ProofURL,
-		&payment.Status,
-		&payment.VerifiedBy,
-		&payment.VerifiedAt,
-		&payment.Notes,
-		&payment.CreatedAt,
-		&payment.UpdatedAt,
-	)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("pembayaran tidak ditemukan")
-		}
-		return nil, err
-	}
-
-	return &payment, nil
-}
 
 // ============================================================
 // APPROVE PAYMENT -> INVOICE PAID
@@ -423,7 +462,7 @@ func (s *PaymentService) ApprovePayment(ctx context.Context, id string, req mode
 	go sendPaymentApprovedWhatsApp(s.DB, s.WhatsApp, id)
 	go NotifyPaymentApproved(s.DB, id)
 
-	return s.GetPaymentByID(ctx, id)
+	return s.getPaymentDetailByID(ctx, id)
 }
 
 // ============================================================
@@ -477,5 +516,5 @@ func (s *PaymentService) RejectPayment(ctx context.Context, id string, req model
 	go sendPaymentRejectedWhatsApp(s.DB, s.WhatsApp, id, reason)
 	go NotifyPaymentRejected(s.DB, id, reason)
 
-	return s.GetPaymentByID(ctx, id)
+	return s.getPaymentDetailByID(ctx, id)
 }

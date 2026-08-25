@@ -11,8 +11,11 @@ type AppNotification struct {
 	Message     string     `json:"message"`
 	ReferenceID *string    `json:"reference_id,omitempty"`
 	TargetRole  string     `json:"target_role"`
-	IsRead      bool       `json:"is_read"`
-	CreatedAt   time.Time  `json:"created_at"`
+	// TargetProfileID hanya terisi saat TargetRole = CLIENT:
+	// membatasi notifikasi ke satu client tertentu.
+	TargetProfileID string    `json:"-"`
+	IsRead          bool      `json:"is_read"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // Nilai kolom type yang dikenal sistem.
@@ -27,5 +30,6 @@ const (
 const (
 	NotifRoleSuperadmin = "SUPERADMIN"
 	NotifRoleAdmin      = "ADMIN"
+	NotifRoleClient     = "CLIENT"
 	NotifRoleAll        = "ALL"
 )

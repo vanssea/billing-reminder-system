@@ -87,7 +87,6 @@ function App() {
           <Route path="products" element={<ClientProducts />} />
           <Route path="profile" element={<ClientProfile />} />
         </Route>
-        />
 
         {/* ==================== ADMIN ==================== */}
         <Route

@@ -17,7 +17,7 @@ import (
 )
 
 type AuthService struct {
-	DB           *pgxpool.Pool
+	DB            *pgxpool.Pool
 	ClientService *ClientService
 }
 

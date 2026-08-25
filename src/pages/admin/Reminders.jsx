@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { getReminders, retryReminder } from "../../services/reminderApi";
+import { useAuth } from "../../context/AuthContext";
 
 /* =========================================================
    CONFIG
@@ -107,6 +108,7 @@ const formatDateTime = (v) =>
 ========================================================= */
 
 export default function AdminReminders() {
+  const { accessToken } = useAuth();
   const [reminders, setReminders] = useState([]);
   const [activeTab, setActiveTab] = useState("JADWAL");
   const [search, setSearch] = useState("");
@@ -121,7 +123,7 @@ export default function AdminReminders() {
     try {
       setLoading(true);
       setError("");
-      const data = await getReminders();
+      const data = await getReminders(accessToken);
       setReminders(data || []);
     } catch (err) {
       console.error(err);
@@ -190,7 +192,7 @@ export default function AdminReminders() {
   const handleRetry = async (reminder) => {
     try {
       setError("");
-      await retryReminder(reminder.id);
+      await retryReminder(reminder.id, accessToken);
       setSelectedReminder(null);
       showSuccess("Reminder dimasukkan kembali ke antrean WhatsApp.");
       await loadReminders();
@@ -201,7 +203,7 @@ export default function AdminReminders() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fcf8ff] pt-16 md:pl-[280px]">
+    <div className="min-h-screen bg-[#fcf8ff] pt-16 app-content">
       <Sidebar role="admin" />
       <Header />
       <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">

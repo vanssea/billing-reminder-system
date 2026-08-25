@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"strings"
 
 	"billing-reminder-system/config"
 
@@ -12,17 +14,22 @@ import (
 
 // dbreset mengarahkan nomor HP client PT ABC Indonesia ke nomor tujuan
 // lalu mereset reminder INV-2026-006 H-1 agar dikirim ulang sekarang.
+// Nomor testing diambil dari environment variable TEST_WHATSAPP_NUMBER
+// agar tidak ada nomor pribadi/test yang hardcoded di source code.
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Fatal("Gagal membaca file .env")
+	}
+
+	phone := strings.TrimSpace(os.Getenv("TEST_WHATSAPP_NUMBER"))
+	if phone == "" {
+		log.Fatal("Environment variable TEST_WHATSAPP_NUMBER belum diset. Contoh: set TEST_WHATSAPP_NUMBER=6281234567890 lalu jalankan ulang.")
 	}
 
 	db := config.ConnectDatabase()
 	defer db.Close()
 
 	ctx := context.Background()
-
-	phone := "082337910990"
 
 	_, err := db.Exec(ctx, `
 		UPDATE clients SET phone = $1

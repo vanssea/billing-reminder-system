@@ -80,6 +80,16 @@ export async function purchaseProduct(productId, billingCycle, token) {
       product_id: productId,
       billing_cycle: billingCycle,
     }),
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Gagal membuat permintaan pembelian");
+  }
+
+  return response.json();
+}
+
 // ==========================================
 // FUNGSI TAMBAHAN KHUSUS UNTUK ADMIN PRODUCT
 // ==========================================
@@ -108,7 +118,6 @@ export async function updateProductStatus(id, newStatus) {
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || "Gagal membuat permintaan pembelian");
     throw new Error(message || "Gagal mengubah status produk");
   }
 

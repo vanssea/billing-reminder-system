@@ -2,10 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
-	"strings"
 
+	"billing-reminder-system/middleware"
 	"billing-reminder-system/models"
 	"billing-reminder-system/services"
 
@@ -13,39 +14,49 @@ import (
 )
 
 type AppNotificationHandler struct {
-	Service *services.AppNotificationService
+	Service     *services.AppNotificationService
+	AuthService *services.AuthService
 }
 
-func NewAppNotificationHandler(service *services.AppNotificationService) *AppNotificationHandler {
-	return &AppNotificationHandler{Service: service}
+func NewAppNotificationHandler(service *services.AppNotificationService, authService *services.AuthService) *AppNotificationHandler {
+	return &AppNotificationHandler{Service: service, AuthService: authService}
 }
 
-// roleFilter mengubah query param role menjadi daftar target_role
-// yang boleh dilihat. Role tidak dikenal hanya melihat notifikasi ALL.
-func roleFilter(r *http.Request) []string {
-	switch strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("role"))) {
-	case "SUPERADMIN":
-		return []string{models.NotifRoleSuperadmin, models.NotifRoleAll}
-	case "ADMIN":
-		return []string{models.NotifRoleAdmin, models.NotifRoleAll}
+// notificationScope menentukan scope notifikasi berdasarkan identitas
+// terautentikasi (middleware), BUKAN dari parameter request.
+//
+//	ADMIN/SUPERADMIN -> feed internal yang sama (ADMIN + SUPERADMIN + ALL)
+//	CLIENT           -> hanya notifikasi yang ditujukan ke profile-nya
+func notificationScope(r *http.Request) (roles []string, profileID string) {
+	profile := middleware.ProfileFromContext(r)
+	if profile == nil {
+		return []string{models.NotifRoleAll}, ""
+	}
+
+	switch profile.Role {
+	case models.RoleSuperadmin, models.RoleAdmin:
+		return []string{models.NotifRoleSuperadmin, models.NotifRoleAdmin, models.NotifRoleAll}, ""
+	case models.RoleClient:
+		return []string{models.NotifRoleClient}, profile.ID
 	default:
-		return []string{models.NotifRoleAll}
+		return []string{models.NotifRoleAll}, ""
 	}
 }
 
-// ListNotifications GET /api/notifications?role=SUPERADMIN&limit=15
+// ListNotifications GET /api/notifications?limit=15
 // Mengembalikan daftar notifikasi sekaligus jumlah belum dibaca dalam
 // satu panggilan agar polling frontend hemat.
 func (h *AppNotificationHandler) ListNotifications(w http.ResponseWriter, r *http.Request) {
-	roles := roleFilter(r)
+	roles, profileID := notificationScope(r)
 
 	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
 	if err != nil || limit <= 0 {
 		limit = 15
 	}
 
-	data, err := h.Service.List(r.Context(), roles, limit)
+	data, err := h.Service.List(r.Context(), roles, limit, profileID)
 	if err != nil {
+		log.Printf("ListNotifications: %v", err)
 		http.Error(w, "Gagal memuat notifikasi", http.StatusInternalServerError)
 		return
 	}
@@ -53,8 +64,9 @@ func (h *AppNotificationHandler) ListNotifications(w http.ResponseWriter, r *htt
 		data = []models.AppNotification{}
 	}
 
-	unread, err := h.Service.CountUnread(r.Context(), roles)
+	unread, err := h.Service.CountUnread(r.Context(), roles, profileID)
 	if err != nil {
+		log.Printf("CountUnread: %v", err)
 		http.Error(w, "Gagal menghitung notifikasi", http.StatusInternalServerError)
 		return
 	}
@@ -74,8 +86,16 @@ func (h *AppNotificationHandler) MarkRead(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.Service.MarkRead(r.Context(), id); err != nil {
+	roles, profileID := notificationScope(r)
+
+	updated, err := h.Service.MarkRead(r.Context(), id, roles, profileID)
+	if err != nil {
+		log.Printf("MarkRead %d: %v", id, err)
 		http.Error(w, "Gagal menandai notifikasi dibaca", http.StatusInternalServerError)
+		return
+	}
+	if updated == 0 {
+		http.Error(w, "Notifikasi tidak ditemukan", http.StatusNotFound)
 		return
 	}
 
@@ -83,10 +103,13 @@ func (h *AppNotificationHandler) MarkRead(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
-// MarkAllRead PUT /api/notifications/read-all?role=SUPERADMIN
+// MarkAllRead PUT /api/notifications/read-all
 func (h *AppNotificationHandler) MarkAllRead(w http.ResponseWriter, r *http.Request) {
-	updated, err := h.Service.MarkAllRead(r.Context(), roleFilter(r))
+	roles, profileID := notificationScope(r)
+
+	updated, err := h.Service.MarkAllRead(r.Context(), roles, profileID)
 	if err != nil {
+		log.Printf("MarkAllRead: %v", err)
 		http.Error(w, "Gagal menandai semua notifikasi dibaca", http.StatusInternalServerError)
 		return
 	}
