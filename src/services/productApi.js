@@ -22,11 +22,12 @@ export async function getProductById(id) {
   return response.json();
 }
 
-export async function createProduct(data) {
+export async function createProduct(data, token) {
   const response = await fetch(API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(data),
   });
@@ -39,11 +40,12 @@ export async function createProduct(data) {
   return response.json();
 }
 
-export async function updateProduct(id, data) {
+export async function updateProduct(id, data, token) {
   const response = await fetch(`${API_URL}/${id}`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(data),
   });
@@ -56,9 +58,12 @@ export async function updateProduct(id, data) {
   return response.json();
 }
 
-export async function deleteProduct(id) {
+export async function deleteProduct(id, token) {
   const response = await fetch(`${API_URL}/${id}`, {
     method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
 
   if (!response.ok) {
@@ -93,7 +98,7 @@ export async function purchaseProduct(productId, billingCycle, token) {
 // ==========================================
 // FUNGSI TAMBAHAN KHUSUS UNTUK ADMIN PRODUCT
 // ==========================================
-export async function updateProductStatus(id, newStatus) {
+export async function updateProductStatus(id, newStatus, token) {
   // 1. Ambil data produk yang ada saat ini berdasarkan ID-nya
   const getResponse = await fetch(`${API_URL}/${id}`);
   if (!getResponse.ok) {
@@ -112,6 +117,7 @@ export async function updateProductStatus(id, newStatus) {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(updatedPayload),
   });

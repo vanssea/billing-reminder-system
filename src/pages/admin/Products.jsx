@@ -19,6 +19,7 @@ import {
 
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
+import { useAuth } from "../../context/AuthContext";
 import {
   getProducts,
   createProduct,
@@ -92,6 +93,7 @@ const fetchProducts = async () => {
 };
 
 export default function AdminProducts() {
+  const { accessToken } = useAuth();
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -253,10 +255,10 @@ export default function AdminProducts() {
       };
 
       if (editingId) {
-        await updateProduct(editingId, payload);
+        await updateProduct(editingId, payload, accessToken);
         setSuccess("Data produk berhasil diperbarui.");
       } else {
-        await createProduct(payload);
+        await createProduct(payload, accessToken);
         setSuccess("Produk baru berhasil ditambahkan.");
       }
 
@@ -279,7 +281,7 @@ export default function AdminProducts() {
       setSuccess("");
 
       const newDbStatus = statusTarget.status === "Active" ? "INACTIVE" : "ACTIVE";
-      await updateProductStatus(statusTarget.id, newDbStatus);
+      await updateProductStatus(statusTarget.id, newDbStatus, accessToken);
 
       setSuccess(`Status produk berhasil diubah menjadi ${toUiStatus(newDbStatus)}.`);
       setStatusTarget(null);
