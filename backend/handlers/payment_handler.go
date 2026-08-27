@@ -214,6 +214,18 @@ func (h *PaymentHandler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 
 	payment, err := h.Service.CreatePayment(req)
 	if err != nil {
+		message := err.Error()
+
+		if strings.Contains(message, "tidak ditemukan") {
+			http.Error(w, message, http.StatusNotFound)
+			return
+		}
+
+		if strings.Contains(message, "tidak dapat") {
+			http.Error(w, message, http.StatusConflict)
+			return
+		}
+
 		log.Printf("CreatePayment: %v", err)
 		http.Error(w, "Gagal membuat pembayaran", http.StatusInternalServerError)
 		return
@@ -225,6 +237,14 @@ func (h *PaymentHandler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PaymentHandler) UpdatePayment(w http.ResponseWriter, r *http.Request) {
+	// Handler ini tidak diekspos via route (dead code). Guard defensif:
+	// hanya staff (ADMIN/SUPERADMIN) yang boleh memanggil bila diekspos.
+	profile := middleware.ProfileFromContext(r)
+	if profile == nil || (profile.Role != models.RoleAdmin && profile.Role != models.RoleSuperadmin) {
+		http.Error(w, "Akses ditolak", http.StatusForbidden)
+		return
+	}
+
 	id := chi.URLParam(r, "id")
 
 	var req models.UpdatePaymentRequest
@@ -244,6 +264,14 @@ func (h *PaymentHandler) UpdatePayment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PaymentHandler) DeletePayment(w http.ResponseWriter, r *http.Request) {
+	// Handler ini tidak diekspos via route (dead code). Guard defensif:
+	// hanya staff (ADMIN/SUPERADMIN) yang boleh memanggil bila diekspos.
+	profile := middleware.ProfileFromContext(r)
+	if profile == nil || (profile.Role != models.RoleAdmin && profile.Role != models.RoleSuperadmin) {
+		http.Error(w, "Akses ditolak", http.StatusForbidden)
+		return
+	}
+
 	id := chi.URLParam(r, "id")
 
 	err := h.Service.DeletePayment(id)

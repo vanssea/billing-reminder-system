@@ -160,7 +160,8 @@ func (s *InvoiceService) fetchItems(invoiceID string) ([]models.InvoiceItem, err
 			p.name,
 			ii.quantity,
 			ii.price,
-			ii.subtotal
+			ii.subtotal,
+			ii.billing_cycle
 		FROM invoice_items ii
 		JOIN products p ON p.id = ii.product_id
 		WHERE ii.invoice_id = $1
@@ -184,6 +185,7 @@ func (s *InvoiceService) fetchItems(invoiceID string) ([]models.InvoiceItem, err
 			&item.Quantity,
 			&item.Price,
 			&item.Subtotal,
+			&item.BillingCycle,
 		)
 		if err != nil {
 			return nil, err
@@ -593,6 +595,97 @@ func (s *InvoiceService) GetInvoiceByID(id string) (*models.Invoice, error) {
 	return &invoice, nil
 }
 
+func (s *InvoiceService) GetInvoiceByNumber(invoiceNumber string) (*models.Invoice, error) {
+	var invoice models.Invoice
+
+	err := s.DB.QueryRow(context.Background(), `
+		SELECT
+			id,
+			invoice_number,
+			client_id,
+			invoice_date,
+			due_date,
+			sent_at,
+			subtotal,
+			tax,
+			total,
+			status,
+			notes,
+			created_by,
+			created_at,
+			updated_at
+		FROM invoices
+		WHERE invoice_number = $1
+	`, invoiceNumber).Scan(
+		&invoice.ID,
+		&invoice.InvoiceNumber,
+		&invoice.ClientID,
+		&invoice.InvoiceDate,
+		&invoice.DueDate,
+		&invoice.SentAt,
+		&invoice.Subtotal,
+		&invoice.Tax,
+		&invoice.Total,
+		&invoice.Status,
+		&invoice.Notes,
+		&invoice.CreatedBy,
+		&invoice.CreatedAt,
+		&invoice.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	invoice.Items, err = s.fetchItems(invoice.ID)
+	if err != nil {
+		return nil, err
+	}
+	if invoice.Items == nil {
+		invoice.Items = []models.InvoiceItem{}
+	}
+
+	invoice.Payments, err = s.fetchPayments(invoice.ID)
+	if err != nil {
+		return nil, err
+	}
+	if invoice.Payments == nil {
+		invoice.Payments = []models.Payment{}
+	}
+
+	invoice.Reminders, err = s.fetchReminders(invoice.ID)
+	if err != nil {
+		return nil, err
+	}
+	if invoice.Reminders == nil {
+		invoice.Reminders = []models.Reminder{}
+	}
+
+	invoice.ActivityLogs, err = s.fetchActivityLogs(invoice.ID)
+	if err != nil {
+		return nil, err
+	}
+	if invoice.ActivityLogs == nil {
+		invoice.ActivityLogs = []models.ActivityLog{}
+	}
+
+	var client models.Client
+	err = s.DB.QueryRow(context.Background(), `
+		SELECT id, company_name, pic_name, email, phone, address, status
+		FROM clients WHERE id = $1
+	`, invoice.ClientID).Scan(
+		&client.ID, &client.CompanyName, &client.PICName, &client.Email, &client.Phone, &client.Address, &client.Status,
+	)
+	if err == nil {
+		invoice.Client = &client
+	} else if err.Error() == "no rows in result set" {
+		invoice.Client = nil
+	} else {
+		return nil, err
+	}
+
+	return &invoice, nil
+}
+
 func (s *InvoiceService) GetInvoiceTimeline(invoice *models.Invoice) ([]models.InvoiceTimelineStep, error) {
 	payments, err := s.GetPaymentsByInvoiceID(invoice.ID)
 	if err != nil {
@@ -786,10 +879,11 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 	var subtotal float64
 
 	type enrichedItem struct {
-		productID string
-		quantity  int
-		price     float64
-		subtotal  float64
+		productID    string
+		quantity     int
+		price        float64
+		subtotal     float64
+		billingCycle string
 	}
 
 	var eItems []enrichedItem
@@ -797,28 +891,43 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 	for _, item := range req.Items {
 		var price float64
 
-		err := tx.QueryRow(
-			context.Background(),
-			`SELECT price FROM products WHERE id = $1`,
-			item.ProductID,
-		).Scan(&price)
-
-		if err != nil {
-			return nil, fmt.Errorf(
-				"product %s tidak ditemukan",
+		if item.Price > 0 {
+			price = item.Price
+		} else {
+			err := tx.QueryRow(
+				context.Background(),
+				`SELECT price FROM products WHERE id = $1`,
 				item.ProductID,
-			)
+			).Scan(&price)
+
+			if err != nil {
+				return nil, fmt.Errorf(
+					"product %s tidak ditemukan",
+					item.ProductID,
+				)
+			}
 		}
 
-		itemSub := price * float64(item.Quantity)
+		bc := item.BillingCycle
+		if bc == "" {
+			bc = "monthly"
+		}
+
+		duration := 1
+		if bc == "yearly" {
+			duration = 12
+		}
+
+		itemSub := price * float64(item.Quantity) * float64(duration)
 
 		subtotal += itemSub
 
 		eItems = append(eItems, enrichedItem{
-			productID: item.ProductID,
-			quantity:  item.Quantity,
-			price:     price,
-			subtotal:  itemSub,
+			productID:    item.ProductID,
+			quantity:     item.Quantity,
+			price:        price,
+			subtotal:     itemSub,
+			billingCycle: bc,
 		})
 	}
 
@@ -924,15 +1033,17 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 				product_id,
 				quantity,
 				price,
-				subtotal
+				subtotal,
+				billing_cycle
 			)
-			VALUES ($1,$2,$3,$4,$5)
+			VALUES ($1,$2,$3,$4,$5,$6)
 		`,
 			invoice.ID,
 			ei.productID,
 			ei.quantity,
 			ei.price,
 			ei.subtotal,
+			ei.billingCycle,
 		)
 
 		if err != nil {
@@ -971,6 +1082,10 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 	err = tx.Commit(context.Background())
 	if err != nil {
 		return nil, err
+	}
+
+	if invoice.Status == "SENT" || invoice.Status == "UNPAID" {
+		go NotifyInvoiceNew(s.DB, invoice.ID)
 	}
 
 	if invoice.Status == "SENT" && s.WhatsApp != nil {
@@ -1062,10 +1177,11 @@ func (s *InvoiceService) updateInvoiceInternal(
 	var subtotal float64
 
 	type enrichedItem struct {
-		productID string
-		quantity  int
-		price     float64
-		subtotal  float64
+		productID    string
+		quantity     int
+		price        float64
+		subtotal     float64
+		billingCycle string
 	}
 
 	var eItems []enrichedItem
@@ -1073,28 +1189,43 @@ func (s *InvoiceService) updateInvoiceInternal(
 	for _, item := range req.Items {
 		var price float64
 
-		err := tx.QueryRow(
-			context.Background(),
-			`SELECT price FROM products WHERE id = $1`,
-			item.ProductID,
-		).Scan(&price)
-
-		if err != nil {
-			return nil, fmt.Errorf(
-				"product %s tidak ditemukan",
+		if item.Price > 0 {
+			price = item.Price
+		} else {
+			err := tx.QueryRow(
+				context.Background(),
+				`SELECT price FROM products WHERE id = $1`,
 				item.ProductID,
-			)
+			).Scan(&price)
+
+			if err != nil {
+				return nil, fmt.Errorf(
+					"product %s tidak ditemukan",
+					item.ProductID,
+				)
+			}
 		}
 
-		itemSub := price * float64(item.Quantity)
+		bc := item.BillingCycle
+		if bc == "" {
+			bc = "monthly"
+		}
+
+		duration := 1
+		if bc == "yearly" {
+			duration = 12
+		}
+
+		itemSub := price * float64(item.Quantity) * float64(duration)
 
 		subtotal += itemSub
 
 		eItems = append(eItems, enrichedItem{
-			productID: item.ProductID,
-			quantity:  item.Quantity,
-			price:     price,
-			subtotal:  itemSub,
+			productID:    item.ProductID,
+			quantity:     item.Quantity,
+			price:        price,
+			subtotal:     itemSub,
+			billingCycle: bc,
 		})
 	}
 
@@ -1183,15 +1314,17 @@ func (s *InvoiceService) updateInvoiceInternal(
 				product_id,
 				quantity,
 				price,
-				subtotal
+				subtotal,
+				billing_cycle
 			)
-			VALUES ($1,$2,$3,$4,$5)
+			VALUES ($1,$2,$3,$4,$5,$6)
 		`,
 			invoice.ID,
 			ei.productID,
 			ei.quantity,
 			ei.price,
 			ei.subtotal,
+			ei.billingCycle,
 		)
 
 		if err != nil {

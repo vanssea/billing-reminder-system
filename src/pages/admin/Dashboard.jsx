@@ -5,7 +5,7 @@ import {
   Clock,
   Bell,
   CreditCard,
-  MoreHorizontal,
+  Package,
   AlertTriangle,
 } from "lucide-react";
 
@@ -207,9 +207,9 @@ export default function AdminDashboard() {
     },
     {
       title: "Perlu Verifikasi",
-      value: stats.pending_payments ?? 0,
-      description: "Pembayaran menunggu verifikasi",
-      icon: CreditCard,
+      value: stats.pending_purchases ?? 0,
+      description: "Pembelian menunggu persetujuan ",
+      icon: Package,
     },
   ];
 
@@ -285,10 +285,6 @@ export default function AdminDashboard() {
                       <div className="rounded-xl bg-indigo-50 p-2.5 text-indigo-600">
                         <Icon size={20} />
                       </div>
-
-                      <button className="text-slate-400 hover:text-slate-600">
-                        <MoreHorizontal size={18} />
-                      </button>
                     </div>
 
                     <p className="mt-5 text-sm font-medium text-slate-500">

@@ -5,7 +5,10 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
+  CreditCard,
+  FileText,
   LogOut,
+  Package,
   Timer,
   User,
   XCircle,
@@ -18,8 +21,13 @@ import {
 } from "../../services/notificationApi";
 
 const NOTIF_ICONS = {
+  PURCHASE_REQUEST: { Icon: Package, iconClass: "bg-brand-50 text-brand-600" },
+  PURCHASE_APPROVED: { Icon: CheckCircle2, iconClass: "bg-green-50 text-green-600" },
+  PURCHASE_REJECTED: { Icon: XCircle, iconClass: "bg-rose-50 text-rose-600" },
+  PAYMENT_NEW: { Icon: CreditCard, iconClass: "bg-blue-50 text-blue-600" },
   PAYMENT_APPROVED: { Icon: CheckCircle2, iconClass: "bg-green-50 text-green-600" },
   PAYMENT_REJECTED: { Icon: XCircle, iconClass: "bg-rose-50 text-rose-600" },
+  INVOICE_NEW: { Icon: FileText, iconClass: "bg-indigo-50 text-indigo-600" },
   INVOICE_OVERDUE: { Icon: Timer, iconClass: "bg-amber-50 text-amber-600" },
   REMINDER_FAILED: { Icon: Clock, iconClass: "bg-brand-50 text-brand-600" },
 };

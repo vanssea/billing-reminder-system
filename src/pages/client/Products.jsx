@@ -3,10 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { Check, CheckCircle2, ShoppingCart, Sparkles, X, AlertCircle, Loader2, UserPlus, AlertCircle as AlertCircleIcon } from "lucide-react";
 import { getProducts, purchaseProduct } from "../../services/productApi";
+import { getClientInvoices } from "../../services/invoiceApi";
 import { formatIDR } from "../../utils/format";
 import { supabase } from "../../lib/supabaseClient";
-
-const ACTIVE_PRODUCT = "Web Hosting Basic";
 
 const isMonthly = (product) =>
   !product.billing_type ||
@@ -34,9 +33,10 @@ const getMissingProfileFields = (client) => {
 
 export default function ClientProducts() {
   const navigate = useNavigate();
-  const { user, client, isProfileComplete } = useAuth();
+  const { user, client, isProfileComplete, accessToken } = useAuth();
   const [yearly, setYearly] = useState(true);
   const [products, setProducts] = useState([]);
+  const [activeProductIds, setActiveProductIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(null);
@@ -79,17 +79,37 @@ export default function ClientProducts() {
   };
 
   useEffect(() => {
-    getProducts()
-      .then((data) => {
-        const active = data
-          .filter((p) => p.status.toUpperCase() === "ACTIVE")
+    const load = async () => {
+      try {
+        const [prodData, invData] = await Promise.all([
+          getProducts(),
+          client && accessToken ? getClientInvoices(accessToken) : Promise.resolve([]),
+        ]);
+
+        const active = (prodData || [])
+          .filter((p) => p.status && p.status.toUpperCase() === "ACTIVE")
           .sort((a, b) => a.display_order - b.display_order);
 
         setProducts(active);
-      })
-      .catch(() => setError("Gagal memuat daftar paket."))
-      .finally(() => setLoading(false));
-  }, []);
+
+        const ids = new Set();
+        (invData || [])
+          .filter((inv) => inv.status === "PAID")
+          .forEach((inv) => {
+            (inv.items || []).forEach((item) => {
+              if (item?.product_id != null) ids.add(String(item.product_id));
+            });
+          });
+        setActiveProductIds(ids);
+      } catch {
+        setError("Gagal memuat daftar paket.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [client, accessToken]);
 
 return (
     <div>
@@ -184,7 +204,7 @@ return (
         {!loading && !error && products.length > 0 && (
           <div className="grid items-stretch gap-6 lg:grid-cols-3">
             {products.map((product) => {
-              const isActive = product.name === ACTIVE_PRODUCT;
+              const isActive = activeProductIds.has(String(product.id));
               const price = yearly
                 ? product.price_yearly ?? Math.round(product.price * 0.8)
                 : product.price;

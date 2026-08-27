@@ -111,10 +111,11 @@ func (s *PaymentService) GetPaymentsByClientID(clientID string) ([]models.Paymen
 			return nil, err
 		}
 
-		// Populate compatibility fields
+		// Populate compatibility fields (consistent with GetPaymentByID)
 		p.PaymentID = p.ID
 		p.VerificationStatus = p.Status
 		p.RejectionReason = p.Notes
+
 		payments = append(payments, p)
 	}
 
@@ -130,7 +131,10 @@ const paymentDetailSelect = `
 		p.id,
 		p.invoice_id,
 		i.invoice_number,
+		c.pic_name,
 		c.company_name,
+		i.total AS invoice_total,
+		i.due_date,
 		p.amount,
 		p.payment_date,
 		p.payment_method,
@@ -140,10 +144,12 @@ const paymentDetailSelect = `
 		p.verified_at,
 		p.notes,
 		p.created_at,
-		p.updated_at
+		p.updated_at,
+		COALESCE(pr.full_name, '') AS verified_by_name
 	FROM payments p
 	INNER JOIN invoices i ON i.id = p.invoice_id
 	INNER JOIN clients c ON c.id = i.client_id
+	LEFT JOIN profiles pr ON pr.id = p.verified_by
 `
 
 // ============================================================
@@ -169,6 +175,9 @@ func (s *PaymentService) GetPayments(ctx context.Context) ([]models.PaymentDetai
 			&payment.InvoiceID,
 			&payment.InvoiceNumber,
 			&payment.ClientName,
+			&payment.CompanyName,
+			&payment.InvoiceTotal,
+			&payment.DueDate,
 			&payment.Amount,
 			&payment.PaymentDate,
 			&payment.PaymentMethod,
@@ -179,6 +188,7 @@ func (s *PaymentService) GetPayments(ctx context.Context) ([]models.PaymentDetai
 			&payment.Notes,
 			&payment.CreatedAt,
 			&payment.UpdatedAt,
+			&payment.VerifiedByName,
 		)
 		if err != nil {
 			return nil, err
@@ -256,6 +266,9 @@ func (s *PaymentService) getPaymentDetailByID(ctx context.Context, id string) (*
 		&payment.InvoiceID,
 		&payment.InvoiceNumber,
 		&payment.ClientName,
+		&payment.CompanyName,
+		&payment.InvoiceTotal,
+		&payment.DueDate,
 		&payment.Amount,
 		&payment.PaymentDate,
 		&payment.PaymentMethod,
@@ -266,6 +279,7 @@ func (s *PaymentService) getPaymentDetailByID(ctx context.Context, id string) (*
 		&payment.Notes,
 		&payment.CreatedAt,
 		&payment.UpdatedAt,
+		&payment.VerifiedByName,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -280,6 +294,34 @@ func (s *PaymentService) getPaymentDetailByID(ctx context.Context, id string) (*
 func (s *PaymentService) CreatePayment(req models.CreatePaymentRequest) (*models.Payment, error) {
 	paymentDate, _ := time.Parse("2006-01-02", req.PaymentDate)
 
+	ctx := context.Background()
+
+	tx, err := s.DB.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	// Validasi status invoice di dalam transaksi (dengan row lock) agar
+	// tidak ada race condition dengan approve/reject yang mengubah invoice.
+	var invoiceStatus string
+	err = tx.QueryRow(ctx, `
+		SELECT status FROM invoices WHERE id = $1 FOR UPDATE
+	`, req.InvoiceID).Scan(&invoiceStatus)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("invoice tidak ditemukan")
+		}
+		return nil, err
+	}
+
+	if invoiceStatus == "PAID" {
+		return nil, fmt.Errorf("invoice sudah lunas, tidak dapat melakukan pembayaran")
+	}
+	if invoiceStatus == "CANCELLED" {
+		return nil, fmt.Errorf("invoice dibatalkan, tidak dapat melakukan pembayaran")
+	}
+
 	query := `
 		INSERT INTO payments (
 			invoice_id, amount, payment_date,
@@ -293,8 +335,8 @@ func (s *PaymentService) CreatePayment(req models.CreatePaymentRequest) (*models
 	`
 
 	var p models.Payment
-	err := s.DB.QueryRow(
-		context.Background(), query,
+	err = tx.QueryRow(
+		ctx, query,
 		req.InvoiceID, req.Amount, paymentDate,
 		req.PaymentMethod, req.ProofURL,
 	).Scan(
@@ -306,10 +348,18 @@ func (s *PaymentService) CreatePayment(req models.CreatePaymentRequest) (*models
 	if err != nil {
 		return nil, err
 	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
 	// Populate compatibility fields
 	p.PaymentID = p.ID
 	p.VerificationStatus = p.Status
 	p.RejectionReason = p.Notes
+
+	go NotifyPaymentNew(s.DB, p.ID)
+
 	return &p, nil
 }
 
@@ -435,24 +485,45 @@ func (s *PaymentService) ApprovePayment(ctx context.Context, id string, req mode
 		return nil, err
 	}
 
-	// Invoice menjadi LUNAS setelah pembayaran disetujui
-	_, err = tx.Exec(ctx, `
-		UPDATE invoices
-		SET status = 'PAID', updated_at = now()
-		WHERE id = $1
-	`, invoiceID)
+	// Hitung total payment yang sudah APPROVED (termasuk yang baru disetujui)
+	var totalApproved float64
+	err = tx.QueryRow(ctx, `
+		SELECT COALESCE(SUM(amount), 0) FROM payments
+		WHERE invoice_id = $1 AND status = 'APPROVED'
+	`, invoiceID).Scan(&totalApproved)
 	if err != nil {
 		return nil, err
 	}
 
-	// Hentikan reminder yang belum terkirim karena invoice sudah lunas
-	_, err = tx.Exec(ctx, `
-		UPDATE reminders
-		SET status = 'SKIPPED'
-		WHERE invoice_id = $1 AND sent_at IS NULL AND status IN ('PENDING', 'FAILED')
-	`, invoiceID)
+	// Ambil total invoice
+	var invoiceTotal float64
+	err = tx.QueryRow(ctx, `
+		SELECT total FROM invoices WHERE id = $1
+	`, invoiceID).Scan(&invoiceTotal)
 	if err != nil {
 		return nil, err
+	}
+
+	// Invoice menjadi LUNAS hanya jika total payment APPROVED >= total invoice
+	if totalApproved >= invoiceTotal {
+		_, err = tx.Exec(ctx, `
+			UPDATE invoices
+			SET status = 'PAID', updated_at = now()
+			WHERE id = $1
+		`, invoiceID)
+		if err != nil {
+			return nil, err
+		}
+
+		// Hentikan reminder yang belum terkirim karena invoice sudah lunas
+		_, err = tx.Exec(ctx, `
+			UPDATE reminders
+			SET status = 'SKIPPED'
+			WHERE invoice_id = $1 AND sent_at IS NULL AND status IN ('PENDING', 'FAILED')
+		`, invoiceID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {

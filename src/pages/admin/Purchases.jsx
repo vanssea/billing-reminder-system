@@ -240,10 +240,9 @@ export default function AdminPurchases() {
           </div>
         )}
 
-        {/* Table Card */}
-        <div className="overflow-hidden rounded-xl border border-[#e0e3e5] bg-white shadow-sm">
-          {/* Toolbar */}
-          <div className="flex flex-col gap-4 border-b border-[#e0e3e5] p-4 lg:flex-row lg:items-center">
+        {/* Search & Filter */}
+        <div className="mb-6 rounded-2xl border border-[#e5e2ea] bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9a97a9]" />
               <input
@@ -251,7 +250,7 @@ export default function AdminPurchases() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Cari nama produk atau client..."
-                className="w-full rounded-lg border border-[#c7c4d8] bg-white py-2 pl-9 pr-3 text-sm text-[#191c1e] outline-none transition focus:border-[#3525cd] focus:ring-2 focus:ring-[#3525cd]/20"
+                className="w-full rounded-xl border border-[#e0e3e5] bg-white py-2.5 pl-9 pr-3 text-sm text-[#191c1e] shadow-sm outline-none transition focus:border-[#3525cd] focus:ring-2 focus:ring-[#3525cd]/20"
               />
             </div>
 
@@ -277,7 +276,10 @@ export default function AdminPurchases() {
               ))}
             </div>
           </div>
+        </div>
 
+        {/* Table Card */}
+        <div className="overflow-hidden rounded-xl border border-[#e0e3e5] bg-white shadow-sm">
           {/* Table */}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[940px] text-left text-sm">
@@ -285,24 +287,26 @@ export default function AdminPurchases() {
                 <tr className="border-b border-[#e0e3e5] bg-[#faf9fc] text-xs uppercase tracking-wide text-[#9a97a9]">
                   <th className="px-4 py-3 font-semibold">Produk</th>
                   <th className="px-4 py-3 font-semibold">Siklus</th>
-                  <th className="px-4 py-3 font-semibold">Jumlah</th>
+                  <th className="px-4 py-3 font-semibold">Harga/Bulan</th>
+                  <th className="px-4 py-3 font-semibold">Durasi</th>
+                  <th className="px-4 py-3 font-semibold">Total</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold">Tanggal</th>
-                  <th className="px-4 py-3 font-semibold">Catatan</th>
+                  <th className="px-4 py-3 font-semibold">Keterangan</th>
                   <th className="px-4 py-3 text-right font-semibold">Aksi</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && requests.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-[#9a97a9]">
+                    <td colSpan={9} className="px-4 py-12 text-center text-[#9a97a9]">
                       <RefreshCcw className="mx-auto mb-2 animate-spin text-[#3525cd]" size={20} />
                       Memuat data...
                     </td>
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-[#9a97a9]">
+                    <td colSpan={9} className="px-4 py-12 text-center text-[#9a97a9]">
                       <Package size={32} className="mx-auto mb-2 opacity-40" />
                       Tidak ada permintaan pembelian yang cocok.
                     </td>
@@ -319,15 +323,20 @@ export default function AdminPurchases() {
                             <Package size={16} />
                           </div>
                           <div>
-                            <div className="font-medium text-[#191c1e]">{req.product_name}</div>
-                            <div className="text-xs text-[#9a97a9]">ID: {req.client_id?.slice(0, 8)}...</div>
-                          </div>
+                             <div className="font-medium text-[#191c1e]">{req.product_name}</div>
+                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center rounded-md bg-[#f0eef9] px-2 py-1 text-xs font-semibold text-[#3525cd]">
                           {req.billing_cycle === "yearly" ? "Tahunan" : "Bulanan"}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-[#191c1e]">
+                        {formatPrice(req.billing_cycle === "yearly" ? Math.round(req.amount / 12) : req.amount)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-[#191c1e]">
+                        {req.billing_cycle === "yearly" ? "12 bulan" : "1 bulan"}
                       </td>
                       <td className="px-4 py-3 font-medium text-[#191c1e]">{formatPrice(req.amount)}</td>
                       <td className="px-4 py-3"><StatusBadge status={req.status} /></td>
@@ -378,22 +387,113 @@ export default function AdminPurchases() {
 
       {/* Detail Modal */}
       {detailTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDetailTarget(null)}>
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-[#191c1e]">Detail Permintaan</h2>
-              <button onClick={() => setDetailTarget(null)} className="rounded-lg p-1 hover:bg-slate-100"><X size={18} /></button>
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-[1px]"
+          onClick={() => setDetailTarget(null)}
+        >
+          <div
+            className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-[#e0e3e5] bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header Detail */}
+            <div className="relative overflow-hidden bg-gradient-to-r from-[#3525cd] via-[#5b44f3] to-[#6d5cff] px-6 py-6 text-white">
+              <div className="absolute -right-8 -top-8 h-36 w-36 rounded-full bg-white/10" />
+              <div className="absolute right-20 bottom-[-35px] h-28 w-28 rounded-full bg-white/10" />
+
+              <div className="relative flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20">
+                    <Package size={22} />
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold">{detailTarget.product_name}</p>
+                    <p className="text-sm text-white/75">Detail Permintaan Produk</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setDetailTarget(null)}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 text-white transition hover:bg-white/25"
+                  title="Tutup"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="relative mt-6 flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-white/70">
+                    TOTAL
+                  </p>
+                  <div className="mt-1 flex items-baseline gap-2">
+                    <span className="text-3xl font-bold">{formatPrice(detailTarget.amount)}</span>
+                  </div>
+                </div>
+                <StatusBadge status={detailTarget.status} />
+              </div>
             </div>
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between"><span className="text-[#9a97a9]">Produk</span><span className="font-medium">{detailTarget.product_name}</span></div>
-              <div className="flex justify-between"><span className="text-[#9a97a9]">Siklus</span><span className="font-medium">{detailTarget.billing_cycle === "yearly" ? "Tahunan" : "Bulanan"}</span></div>
-              <div className="flex justify-between"><span className="text-[#9a97a9]">Jumlah</span><span className="font-medium">{formatPrice(detailTarget.amount)}</span></div>
-              <div className="flex justify-between"><span className="text-[#9a97a9]">Status</span><StatusBadge status={detailTarget.status} /></div>
-              <div className="flex justify-between"><span className="text-[#9a97a9]">Dibuat</span><span className="font-medium">{formatDateTime(detailTarget.created_at)}</span></div>
+
+            {/* Detail Content */}
+            <div className="max-h-[55vh] overflow-y-auto p-6">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-[#e7e5f4] bg-[#faf9ff] p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9a97a9]">
+                    SIKLUS BILLING
+                  </p>
+                  <p className="mt-2 text-base font-semibold text-[#191c1e]">
+                    {detailTarget.billing_cycle === "yearly" ? "Tahunan" : "Bulanan"}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-[#e7e5f4] bg-[#faf9ff] p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9a97a9]">
+                    DURASI
+                  </p>
+                  <p className="mt-2 text-base font-semibold text-[#191c1e]">
+                    {detailTarget.billing_cycle === "yearly" ? "12 bulan" : "1 bulan"}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-[#e7e5f4] bg-[#faf9ff] p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9a97a9]">
+                    HARGA / BULAN
+                  </p>
+                  <p className="mt-2 text-base font-semibold text-[#191c1e]">
+                    {formatPrice(
+                      detailTarget.billing_cycle === "yearly"
+                        ? Math.round(detailTarget.amount / 12)
+                        : detailTarget.amount
+                    )}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-[#e7e5f4] bg-[#faf9ff] p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9a97a9]">
+                    DIBUAT
+                  </p>
+                  <p className="mt-2 text-base font-semibold text-[#191c1e]">
+                    {detailTarget.created_at
+                      ? new Date(detailTarget.created_at).toLocaleString("id-ID", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "-"}
+                  </p>
+                </div>
+              </div>
+
               {detailTarget.admin_notes && (
-                <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-[11px] font-bold uppercase text-[#9a97a9]">Catatan Admin</p>
-                  <p className="mt-1 text-sm text-[#191c1e]">{detailTarget.admin_notes}</p>
+                <div className="mt-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9a97a9]">
+                    CATATAN ADMIN
+                  </p>
+                  <div className="mt-2 rounded-xl bg-[#faf9fc] p-4 text-sm leading-relaxed text-[#464555]">
+                    {detailTarget.admin_notes}
+                  </div>
                 </div>
               )}
             </div>

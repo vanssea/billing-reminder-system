@@ -66,11 +66,18 @@ func (h *InvoiceHandler) GetInvoices(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(invoices)
 }
 
+func (h *InvoiceHandler) fetchInvoice(idOrNumber string) (*models.Invoice, error) {
+	invoice, err := h.Service.GetInvoiceByID(idOrNumber)
+	if err == nil && invoice != nil {
+		return invoice, nil
+	}
+	return h.Service.GetInvoiceByNumber(idOrNumber)
+}
+
 func (h *InvoiceHandler) GetInvoiceByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	profile := middleware.ProfileFromContext(r)
 
-	// CLIENT hanya boleh membuka invoice miliknya sendiri.
 	if profile != nil && profile.Role == models.RoleClient {
 		client, err := h.Service.GetClientByProfileID(profile.ID)
 		if err != nil {
@@ -78,7 +85,7 @@ func (h *InvoiceHandler) GetInvoiceByID(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		invoice, err := h.Service.GetInvoiceByID(id)
+		invoice, err := h.fetchInvoice(id)
 		if err != nil {
 			log.Printf("GetInvoiceByID: %v", err)
 			http.Error(w, "Gagal mengambil invoice", http.StatusInternalServerError)
@@ -93,7 +100,7 @@ func (h *InvoiceHandler) GetInvoiceByID(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	invoice, err := h.Service.GetInvoiceByID(id)
+	invoice, err := h.fetchInvoice(id)
 	if err != nil {
 		log.Printf("GetInvoiceByID: %v", err)
 		http.Error(w, "Gagal mengambil invoice", http.StatusInternalServerError)

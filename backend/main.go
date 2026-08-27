@@ -45,6 +45,7 @@ func main() {
 	paymentService := services.NewPaymentService(db, clientService)
 	paymentService.WhatsApp = waService
 	purchaseService := services.NewPurchaseService(db, clientService, productService)
+	purchaseService.InvoiceService = invoiceService
 	reminderService := services.NewReminderService(db)
 	reminderService.WhatsApp = waService
 	reminderService.PDF = pdfService

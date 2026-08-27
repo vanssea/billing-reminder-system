@@ -302,13 +302,13 @@ export default function AdminReminders() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
 
             <div className="relative flex-1">
-              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#aaa7b5]" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9a97a9]" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Cari invoice atau client..."
-                className="w-full rounded-xl border border-[#e5e2ea] bg-[#faf9fc] py-2.5 pl-10 pr-4 text-sm text-[#191c1e] outline-none transition focus:border-[#3525cd] focus:ring-2 focus:ring-[#3525cd]/15"
+                className="w-full rounded-xl border border-[#e0e3e5] bg-white py-2.5 pl-9 pr-3 text-sm text-[#191c1e] shadow-sm outline-none transition focus:border-[#3525cd] focus:ring-2 focus:ring-[#3525cd]/20"
               />
             </div>
 

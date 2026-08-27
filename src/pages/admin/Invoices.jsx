@@ -310,11 +310,11 @@ export default function AdminInvoices() {
   }, [detailTarget]);
 
   return (
-    <div className="min-h-screen bg-[#fcf8ff] flex">
+    <div className="min-h-screen bg-[#fcf8ff] pt-16 app-content">
       <Sidebar role="admin" />
       <Header />
 
-      <main className="flex-1 mt-20 md:ml-[280px] p-4 sm:p-6 lg:p-8 w-full overflow-x-hidden">
+      <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
         {/* Banner */}
         <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#3525cd] to-[#5b44f3] p-6 text-white shadow-lg">
           <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
@@ -338,7 +338,7 @@ export default function AdminInvoices() {
         </div>
 
         {/* Stats */}
-        <div className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
           {stats.map((s) => {
             const I = s.icon;
             return (

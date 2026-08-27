@@ -35,16 +35,17 @@ func (s *AppNotificationService) StartOverdueWatcher(ctx context.Context) {
 }
 
 type appOverdueRow struct {
-	ID      string
-	Number  string
-	Company string
-	Total   float64
-	Due     time.Time
+	ID        string
+	Number    string
+	Company   string
+	ProfileID string
+	Total     float64
+	Due       time.Time
 }
 
 func (s *AppNotificationService) notifyNewOverdueInvoices(ctx context.Context) {
 	rows, err := s.DB.Query(ctx, `
-		SELECT i.id::text, i.invoice_number, c.company_name, i.total, i.due_date
+		SELECT i.id::text, i.invoice_number, c.company_name, COALESCE(c.profile_id::text, ''), i.total, i.due_date
 		FROM invoices i
 		JOIN clients c ON c.id = i.client_id
 		WHERE i.status = 'OVERDUE'
@@ -64,7 +65,7 @@ func (s *AppNotificationService) notifyNewOverdueInvoices(ctx context.Context) {
 	var items []appOverdueRow
 	for rows.Next() {
 		var r appOverdueRow
-		if err := rows.Scan(&r.ID, &r.Number, &r.Company, &r.Total, &r.Due); err != nil {
+		if err := rows.Scan(&r.ID, &r.Number, &r.Company, &r.ProfileID, &r.Total, &r.Due); err != nil {
 			log.Println("Overdue watcher gagal membaca baris:", err)
 			return
 		}
@@ -89,6 +90,24 @@ func (s *AppNotificationService) notifyNewOverdueInvoices(ctx context.Context) {
 
 		if err := s.insert(ctx, n); err != nil {
 			log.Printf("Gagal menyimpan notifikasi overdue (%s): %v", it.Number, err)
+		}
+
+		if it.ProfileID != "" {
+			clientNotif := &models.AppNotification{
+				Type: models.NotifTypeInvoiceOverdue,
+				Title: "Invoice Melewati Jatuh Tempo",
+				Message: fmt.Sprintf(
+					"Invoice %s sebesar %s telah melewati jatuh tempo %s. Segera lakukan pembayaran.",
+					it.Number, formatRupiah(it.Total), formatTanggalIndo(it.Due),
+				),
+				ReferenceID:     strPtr(it.ID),
+				TargetRole:      models.NotifRoleClient,
+				TargetProfileID: it.ProfileID,
+			}
+
+			if err := s.insert(ctx, clientNotif); err != nil {
+				log.Printf("Gagal menyimpan notifikasi overdue client (%s): %v", it.Number, err)
+			}
 		}
 	}
 }

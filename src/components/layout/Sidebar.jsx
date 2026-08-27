@@ -11,6 +11,7 @@ import {
   Server,
   Settings,
   ShieldCheck,
+  ShoppingBag,
   Users,
 } from "lucide-react";
 import { Logo } from "../landing/Navbar";
@@ -38,6 +39,7 @@ const adminMenu = {
     { label: "Products", icon: Server, path: "/admin/products" },
     { label: "Invoices", icon: ReceiptText, path: "/admin/invoices" },
     { label: "Payments", icon: CreditCard, path: "/admin/payments" },
+    { label: "Purchases", icon: ShoppingBag, path: "/admin/purchases" },
     { label: "Reminders", icon: BellRing, path: "/admin/reminders" },
     { label: "Reports", icon: BarChart3, path: "/admin/reports" },
   ],

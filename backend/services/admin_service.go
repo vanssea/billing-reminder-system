@@ -335,7 +335,8 @@ func (s *AdminService) GetDashboardSummary() (*models.DashboardSummary, error) {
 			COUNT(id) FILTER (WHERE status = 'PAID') as paid_invoices,
 			COUNT(id) FILTER (WHERE status = 'UNPAID') as unpaid_invoices,
 			COUNT(id) FILTER (WHERE status = 'OVERDUE') as overdue_invoices,
-			(SELECT COUNT(id) FROM payments WHERE status = 'PENDING') as pending_payments
+			(SELECT COUNT(id) FROM payments WHERE status = 'PENDING') as pending_payments,
+			(SELECT COUNT(id) FROM purchase_requests WHERE status = 'PENDING') as pending_purchases
 		FROM invoices
 	`
 	err := s.DB.QueryRow(ctx, statsQuery).Scan(
@@ -345,6 +346,7 @@ func (s *AdminService) GetDashboardSummary() (*models.DashboardSummary, error) {
 		&summary.Stats.UnpaidInvoices,
 		&summary.Stats.OverdueInvoices,
 		&summary.Stats.PendingPayments,
+		&summary.Stats.PendingPurchases,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("gagal mengambil stats: %w", err)
@@ -441,7 +443,7 @@ func (s *AdminService) GetSuperAdminDashboard() (*models.SuperAdminDashboard, er
 	// 1. Stats utama (clients, admins, invoices, revenue)
 	statsQuery := `
 		SELECT
-			(SELECT COUNT(id) FROM clients),
+			(SELECT COUNT(*) FROM clients c JOIN profiles p ON p.id = c.profile_id WHERE p.role = 'CLIENT'),
 			(SELECT COUNT(id) FROM profiles WHERE role = 'ADMIN'),
 			COUNT(id),
 			COUNT(id) FILTER (WHERE status = 'PAID'),

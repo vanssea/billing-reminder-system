@@ -150,6 +150,190 @@ func fetchAppPaymentData(ctx context.Context, db *pgxpool.Pool, paymentID string
 	return &d, nil
 }
 
+// NotifyPurchaseRequest membuat notifikasi lonceng saat client mengirim
+// purchase request baru (status PENDING) yang menunggu verifikasi admin.
+func NotifyPurchaseRequest(db *pgxpool.Pool, purchaseID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	svc := &AppNotificationService{DB: db}
+
+	var companyName, productName, billingCycle string
+	var amount int64
+	err := db.QueryRow(ctx, `
+		SELECT COALESCE(c.company_name, ''), pr.product_name, pr.billing_cycle, pr.amount
+		FROM purchase_requests pr
+		JOIN clients c ON c.id = pr.client_id
+		WHERE pr.id = $1
+	`, purchaseID).Scan(&companyName, &productName, &billingCycle, &amount)
+	if err != nil {
+		log.Printf("Notifikasi purchase request gagal untuk request %s: %v", purchaseID, err)
+		return
+	}
+
+	if strings.TrimSpace(companyName) == "" {
+		companyName = "client"
+	}
+
+	n := &models.AppNotification{
+		Type:        models.NotifTypePurchaseRequest,
+		Title:       "Purchase Request Baru",
+		Message: fmt.Sprintf(
+			"Purchase request baru dari %s untuk produk %s (%s) sebesar %s menunggu verifikasi.",
+			companyName, productName, billingCycle, formatRupiah(float64(amount)),
+		),
+		ReferenceID: strPtr(purchaseID),
+		TargetRole:  models.NotifRoleAll,
+	}
+
+	if err := svc.insert(ctx, n); err != nil {
+		log.Printf("Gagal menyimpan notifikasi purchase request (%s): %v", purchaseID, err)
+	}
+}
+
+// NotifyPurchaseStatus membuat notifikasi lonceng untuk CLIENT saat
+// purchase request-nya disetujui atau ditolak oleh admin.
+func NotifyPurchaseStatus(db *pgxpool.Pool, purchaseID, status, adminNotes string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	svc := &AppNotificationService{DB: db}
+
+	var productName string
+	var profileID *string
+	err := db.QueryRow(ctx, `
+		SELECT pr.product_name, pr.profile_id
+		FROM purchase_requests pr
+		WHERE pr.id = $1
+	`, purchaseID).Scan(&productName, &profileID)
+	if err != nil {
+		log.Printf("Notifikasi purchase status gagal untuk request %s: %v", purchaseID, err)
+		return
+	}
+	if profileID == nil || *profileID == "" {
+		return
+	}
+
+	var ntype string
+	var title, message string
+	if status == "APPROVED" {
+		ntype = models.NotifTypePurchaseApproved
+		title = "Purchase Request Disetujui"
+		message = fmt.Sprintf(
+			"Permintaan pembelian Anda untuk produk %s telah disetujui. Invoice telah dibuat.",
+			productName,
+		)
+	} else if status == "REJECTED" {
+		ntype = models.NotifTypePurchaseRejected
+		title = "Purchase Request Ditolak"
+		message = fmt.Sprintf(
+			"Permintaan pembelian Anda untuk produk %s ditolak.",
+			productName,
+		)
+		if strings.TrimSpace(adminNotes) != "" {
+			message += " Alasan: " + strings.TrimSpace(adminNotes)
+		}
+	} else {
+		return
+	}
+
+	n := &models.AppNotification{
+		Type:            ntype,
+		Title:           title,
+		Message:         message,
+		ReferenceID:     strPtr(purchaseID),
+		TargetRole:      models.NotifRoleClient,
+		TargetProfileID: *profileID,
+	}
+
+	if err := svc.insert(ctx, n); err != nil {
+		log.Printf("Gagal menyimpan notifikasi purchase status (%s): %v", purchaseID, err)
+	}
+}
+
+// NotifyInvoiceNew membuat notifikasi lonceng untuk CLIENT saat invoice
+// baru dibuat untuk client tersebut.
+func NotifyInvoiceNew(db *pgxpool.Pool, invoiceID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	svc := &AppNotificationService{DB: db}
+
+	var invoiceNumber string
+	var profileID *string
+	err := db.QueryRow(ctx, `
+		SELECT i.invoice_number, c.profile_id
+		FROM invoices i
+		JOIN clients c ON c.id = i.client_id
+		WHERE i.id = $1
+	`, invoiceID).Scan(&invoiceNumber, &profileID)
+	if err != nil {
+		log.Printf("Notifikasi invoice baru gagal untuk invoice %s: %v", invoiceID, err)
+		return
+	}
+	if profileID == nil || *profileID == "" {
+		return
+	}
+
+	n := &models.AppNotification{
+		Type:            models.NotifTypeInvoiceNew,
+		Title:           "Invoice Baru",
+		Message: fmt.Sprintf(
+			"Invoice baru %s telah dibuat untuk Anda. Silakan lakukan pembayaran sebelum jatuh tempo.",
+			invoiceNumber,
+		),
+		ReferenceID:     strPtr(invoiceID),
+		TargetRole:      models.NotifRoleClient,
+		TargetProfileID: *profileID,
+	}
+
+	if err := svc.insert(ctx, n); err != nil {
+		log.Printf("Gagal menyimpan notifikasi invoice baru (%s): %v", invoiceID, err)
+	}
+}
+
+// NotifyPaymentNew membuat notifikasi lonceng saat client mengirim bukti
+// pembayaran baru (status PENDING) yang menunggu verifikasi.
+func NotifyPaymentNew(db *pgxpool.Pool, paymentID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	svc := &AppNotificationService{DB: db}
+
+	var invoiceNumber, companyName string
+	var amount float64
+	err := db.QueryRow(ctx, `
+		SELECT i.invoice_number, COALESCE(c.company_name, ''), p.amount
+		FROM payments p
+		JOIN invoices i ON i.id = p.invoice_id
+		JOIN clients c ON c.id = i.client_id
+		WHERE p.id = $1
+	`, paymentID).Scan(&invoiceNumber, &companyName, &amount)
+	if err != nil {
+		log.Printf("Notifikasi pembayaran baru gagal untuk payment %s: %v", paymentID, err)
+		return
+	}
+
+	if strings.TrimSpace(companyName) == "" {
+		companyName = "client"
+	}
+
+	n := &models.AppNotification{
+		Type:        models.NotifTypePaymentNew,
+		Title:       "Pembayaran Baru",
+		Message: fmt.Sprintf(
+			"Pembayaran baru dari %s untuk invoice %s sebesar %s menunggu verifikasi.",
+			companyName, invoiceNumber, formatRupiah(amount),
+		),
+		ReferenceID: strPtr(paymentID),
+		TargetRole:  models.NotifRoleAll,
+	}
+
+	if err := svc.insert(ctx, n); err != nil {
+		log.Printf("Gagal menyimpan notifikasi pembayaran baru (%s): %v", paymentID, err)
+	}
+}
+
 // NotifyPaymentApproved membuat notifikasi lonceng saat pembayaran disetujui.
 func NotifyPaymentApproved(db *pgxpool.Pool, paymentID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -285,7 +469,7 @@ func NotifyReminderFailed(db *pgxpool.Pool, reminderID string) {
 		Title:       "Reminder Gagal Terkirim",
 		Message:     message,
 		ReferenceID: strPtr(reminderID),
-		TargetRole:  models.NotifRoleSuperadmin,
+		TargetRole:  models.NotifRoleAll,
 	}
 
 	if err := svc.insertOnce(ctx, n, 6*time.Hour); err != nil {

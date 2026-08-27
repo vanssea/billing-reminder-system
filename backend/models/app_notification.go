@@ -20,10 +20,15 @@ type AppNotification struct {
 
 // Nilai kolom type yang dikenal sistem.
 const (
-	NotifTypePaymentApproved = "PAYMENT_APPROVED"
-	NotifTypePaymentRejected = "PAYMENT_REJECTED"
-	NotifTypeInvoiceOverdue  = "INVOICE_OVERDUE"
-	NotifTypeReminderFailed  = "REMINDER_FAILED"
+	NotifTypePurchaseRequest = "PURCHASE_REQUEST"
+	NotifTypePurchaseApproved = "PURCHASE_APPROVED"
+	NotifTypePurchaseRejected = "PURCHASE_REJECTED"
+	NotifTypePaymentNew       = "PAYMENT_NEW"
+	NotifTypePaymentApproved  = "PAYMENT_APPROVED"
+	NotifTypePaymentRejected  = "PAYMENT_REJECTED"
+	NotifTypeInvoiceNew       = "INVOICE_NEW"
+	NotifTypeInvoiceOverdue   = "INVOICE_OVERDUE"
+	NotifTypeReminderFailed   = "REMINDER_FAILED"
 )
 
 // Nilai kolom target_role.

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -7,14 +7,15 @@ import {
   Download,
   FileText,
   Landmark,
+  Loader2,
   QrCode,
   ReceiptText,
   Upload,
-  Loader2,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { getClientInvoiceById } from "../../services/invoiceApi";
 import { formatDate, formatRupiah } from "../../utils/format";
+import InvoiceTemplate from "../../components/invoice/InvoiceTemplate";
 
 const invoiceStatusConfig = {
   DRAFT: { label: "Draft", badge: "bg-slate-100 text-slate-600" },
@@ -46,7 +47,8 @@ function getVirtualAccountNumber(invoiceId) {
 }
 
 function getInvoiceTotal(invoice) {
-  return invoice.subtotal + invoice.tax - invoice.discount;
+  if (invoice.total != null) return invoice.total;
+  return (invoice.subtotal || 0) + (invoice.tax || 0);
 }
 
 function InfoRow({ label, value, highlight = false }) {
@@ -73,6 +75,8 @@ export default function InvoiceDetail() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [downloading, setDownloading] = useState(false);
+  const invoiceRef = useRef(null);
 
   useEffect(() => {
     if (!client || !accessToken || !id) return;
@@ -98,6 +102,38 @@ export default function InvoiceDetail() {
       return () => clearTimeout(timer);
     }
   }, [location.state, data]);
+
+  const handleDownloadPDF = useCallback(async () => {
+    if (!invoiceRef.current) return;
+    setDownloading(true);
+    try {
+      const html2canvas = (await import("html2canvas-pro")).default;
+      const jsPDF = (await import("jspdf")).default;
+      const canvas = await html2canvas(invoiceRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+      });
+      const imgData = canvas.toDataURL("image/png");
+      const imgWidth = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const pdf = new jsPDF("p", "mm", "a4");
+      pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+      pdf.save(`${invoice?.invoice_number || "invoice"}.pdf`);
+    } catch (err) {
+      setError("Gagal mengunduh PDF: " + err.message);
+    } finally {
+      setDownloading(false);
+    }
+  }, [data]);
+
+  // Dukungan tombol "Download PDF" dari halaman daftar (MyInvoices): saat
+  // diarahkan ke sini dengan state.pdf, unduh PDF begitu data tersedia.
+  useEffect(() => {
+    if (location.state?.pdf && data?.invoice && !downloading) {
+      handleDownloadPDF();
+    }
+  }, [location.state, data, downloading, handleDownloadPDF]);
 
   if (loading) {
     return (
@@ -157,16 +193,17 @@ export default function InvoiceDetail() {
 
           <button
             type="button"
-            onClick={() => window.print()}
-            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-600/30 transition hover:brightness-110"
+            onClick={handleDownloadPDF}
+            disabled={downloading}
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-600/30 transition hover:brightness-110 disabled:opacity-50"
           >
-            <Download size={16} />
+            {downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
             Download PDF
           </button>
         </div>
 
         <div className="mb-6 flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-bold text-slate-900">{invoice.id}</h1>
+          <h1 className="text-2xl font-bold text-slate-900">{invoice.invoice_number}</h1>
 
           <span
             className={`inline-flex rounded-md px-2.5 py-1 text-xs font-bold ${config.badge}`}
@@ -189,31 +226,31 @@ export default function InvoiceDetail() {
                 </h2>
 
                 <p className="text-xs text-slate-500">
-                  Detail tagihan untuk {invoice.client}
+                  Detail tagihan untuk {invoice.client?.company_name || invoice.client_id}
                 </p>
               </div>
             </div>
 
             <div className="mt-4">
-              <InfoRow label="Nomor Invoice" value={invoice.id} />
+              <InfoRow label="Nomor Invoice" value={invoice.invoice_number} />
 
               <InfoRow label="Tanggal Invoice" value={formatDate(invoice.invoice_date)} />
 
               <InfoRow label="Jatuh Tempo" value={formatDate(invoice.due_date)} />
 
-              <InfoRow label="Client" value={invoice.client} />
+              <InfoRow label="Client" value={invoice.client?.company_name || invoice.client_id} />
 
-              <InfoRow label="Produk / Layanan" value={invoice.product} />
+              <InfoRow label="Produk / Layanan" value={invoice.items?.length > 0 ? invoice.items.map((i) => `${i.product_name}${i.billing_cycle === "yearly" ? " (12 Bulan)" : i.billing_cycle === "monthly" ? " (1 Bulan)" : ""}`).join(", ") : "—"} />
 
               <div className="my-3 border-t border-slate-100" />
 
               <InfoRow label="Subtotal" value={formatRupiah(invoice.subtotal)} />
 
-              <InfoRow label="Pajak (PPN 11%)" value={formatRupiah(invoice.tax)} />
+              <InfoRow label="Pajak (PPN 10%)" value={formatRupiah(invoice.tax)} />
 
               <InfoRow
                 label="Diskon"
-                value={invoice.discount > 0 ? `- ${formatRupiah(invoice.discount)}` : "—"}
+                value={invoice.discount ? `- ${formatRupiah(invoice.discount)}` : "—"}
               />
 
               <div className="my-3 border-t border-slate-100" />
@@ -308,7 +345,7 @@ export default function InvoiceDetail() {
                 <button
                   type="button"
                   onClick={() =>
-                    navigate(`/client/payments?invoice=${invoice.id}`)
+                    navigate(`/client/payments?invoice=${invoice.invoice_number}`)
                   }
                   className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-600/30 transition hover:brightness-110"
                 >
@@ -514,6 +551,21 @@ export default function InvoiceDetail() {
           </div>
         </div>
       </main>
+
+      {/* Hidden InvoiceTemplate for PDF capture */}
+      <div
+        ref={invoiceRef}
+        style={{
+          position: "fixed",
+          left: "-9999px",
+          top: 0,
+          width: "794px",
+          zIndex: -1,
+          pointerEvents: "none",
+        }}
+      >
+        <InvoiceTemplate invoice={invoice} />
+      </div>
     </div>
   );
 }

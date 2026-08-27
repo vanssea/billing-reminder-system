@@ -235,6 +235,11 @@ export default function InvoiceTemplate({ invoice = {} }) {
                     <tr key={item.id || i} className="border-b border-[#D9D9D9]">
                       <td className="px-4 py-4">
                         <p className="font-semibold text-[#222222]">{item.product_name || "-"}</p>
+                        {item.billing_cycle && item.billing_cycle !== "" && (
+                          <p className="mt-0.5 text-xs text-[#666666]">
+                            {item.billing_cycle === "yearly" ? "12 Bulan" : "1 Bulan"}
+                          </p>
+                        )}
                         {item.description && (
                           <p className="mt-0.5 text-xs text-[#666666]">{item.description}</p>
                         )}
@@ -242,7 +247,7 @@ export default function InvoiceTemplate({ invoice = {} }) {
                       <td className="px-4 py-4 text-center text-[#222222]">{formatIDR(item.price)}</td>
                       <td className="px-4 py-4 text-center text-[#222222]">{item.quantity}</td>
                       <td className="px-4 py-4 text-right font-semibold text-[#222222]">
-                        {formatIDR((Number(item.quantity) || 0) * (Number(item.price) || 0))}
+                        {formatIDR(item.subtotal)}
                       </td>
                     </tr>
                   ))}
