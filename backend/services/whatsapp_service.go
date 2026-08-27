@@ -3,12 +3,10 @@ package services
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/mdp/qrterminal/v3"
 	"go.mau.fi/whatsmeow"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -17,57 +15,48 @@ import (
 	waLog "go.mau.fi/whatsmeow/util/log"
 	"google.golang.org/protobuf/proto"
 
-	// Driver SQLite murni Go (tanpa perlu compiler C / CGO)
 	_ "modernc.org/sqlite"
 )
 
-// WhatsAppService membungkus client whatsmeow agar mudah dipakai
-// oleh reminder scheduler maupun endpoint test.
+// WhatsAppService membungkus client whatsmeow.
 type WhatsAppService struct {
 	Client *whatsmeow.Client
 	mu     sync.Mutex
 }
 
 // NewWhatsAppService membuat koneksi whatsmeow.
-// Jika belum ada sesi tersimpan, QR dicetak di terminal untuk discan.
-// Jika sudah pernah scan, langsung terhubung otomatis.
+// Jika sudah ada sesi tersimpan, langsung terhubung otomatis.
+// Jika belum ada sesi, tunggu pairing code dari endpoint /api/whatsapp/pair.
 func NewWhatsAppService() (*WhatsAppService, error) {
 	ctx := context.Background()
 
-	// 1. Buka database sesi SQLite (file wa_sessions.db di folder backend)
 	container, err := sqlstore.New(ctx, "sqlite", "file:wa_sessions.db?_foreign_keys=on", nil)
 	if err != nil {
 		return nil, fmt.Errorf("gagal buka database sesi: %w", err)
 	}
 
-	// 2. Ambil sesi pertama (jika sudah pernah scan) atau siapkan sesi baru
 	device, err := container.GetFirstDevice(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("gagal ambil device: %w", err)
 	}
 
-	// 3. Buat object client whatsmeow
 	clientLog := waLog.Stdout("WhatsApp", "INFO", true)
 	client := whatsmeow.NewClient(device, clientLog)
 
 	svc := &WhatsAppService{Client: client}
 
-	// 4. Daftarkan event handler (status koneksi saja, QR ditangani via channel)
 	client.AddEventHandler(func(evt interface{}) {
-		switch evt.(type) {
+		switch e := evt.(type) {
 		case *events.Connected:
 			fmt.Println("WhatsApp terhubung!")
 		case *events.LoggedOut:
-			fmt.Println("WhatsApp logout. Restart backend untuk scan QR baru.")
+			fmt.Println("WhatsApp logout. Gunakan POST /api/whatsapp/pair untuk pairing ulang.")
+		case *events.QR:
+			_ = e
 		}
 	})
 
-	// 5. Bedakan dua alur:
-	//    - Device BARU (belum pernah scan) -> alur pairing QR via GetQRChannel
-	//    - Device SUDAH pernah scan        -> konek langsung di background
-	if device.ID == nil {
-		go svc.runPairingLoop(ctx, client)
-	} else {
+	if device.ID != nil {
 		go func() {
 			if err := client.Connect(); err != nil {
 				clientLog.Errorf("Gagal connect: %v", err)
@@ -78,47 +67,70 @@ func NewWhatsAppService() (*WhatsAppService, error) {
 	return svc, nil
 }
 
-// runPairingLoop menjalankan alur pairing QR. Dijalankan di goroutine
-// karena process ini menunggu QR discan oleh pengguna.
-func (s *WhatsAppService) runPairingLoop(ctx context.Context, client *whatsmeow.Client) {
-	for {
-		// GetQRChannel WAJIB dipanggil sebelum Connect
-		qrChan, err := client.GetQRChannel(ctx)
-		if err != nil {
-			fmt.Println("Gagal membuat channel QR:", err)
-			time.Sleep(3 * time.Second)
-			continue
-		}
+// PairWithCode melakukan pairing menggunakan kode 8 digit (tanpa QR).
+// Harus dipanggil saat client belum terhubung (device.ID == nil).
+func (s *WhatsAppService) PairWithCode(phone string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-		if err := client.Connect(); err != nil {
-			fmt.Println("Gagal connect, mencoba lagi:", err)
-			time.Sleep(3 * time.Second)
-			continue
-		}
-
-		for item := range qrChan {
-			switch item.Event {
-			case whatsmeow.QRChannelEventCode:
-				fmt.Println("\n===== SCAN QR DI BAWAH INI DENGAN WHATSAPP (nomor bot) =====")
-				qrterminal.GenerateHalfBlock(item.Code, qrterminal.L, os.Stdout)
-				fmt.Println("============================================================")
-			case "success":
-				fmt.Println("WhatsApp berhasil ditautkan!")
-				return
-			case "timeout":
-				fmt.Printf("QR kedaluwarsa (%v), mencoba kembali...\n", item.Timeout)
-			default:
-				if item.Error != nil {
-					fmt.Println("Error pairing:", item.Error)
-				}
-			}
-		}
-
-		// Channel tertutup -> disconnect & coba lagi (untuk perangkat baru
-		// auto-reconnect milik whatsmeow memang dimatikan).
-		client.Disconnect()
-		time.Sleep(5 * time.Second)
+	if s.Client == nil {
+		return "", fmt.Errorf("whatsapp client belum siap")
 	}
+
+	if s.Client.IsConnected() {
+		return "", fmt.Errorf("whatsapp sudah terhubung, tidak perlu pairing")
+	}
+
+	phone = strings.TrimSpace(phone)
+	phone = strings.TrimPrefix(phone, "+")
+	var digits strings.Builder
+	for _, r := range phone {
+		if r >= '0' && r <= '9' {
+			digits.WriteRune(r)
+		}
+	}
+	phone = digits.String()
+
+	if strings.HasPrefix(phone, "0") {
+		phone = "62" + phone[1:]
+	}
+	if len(phone) < 10 {
+		return "", fmt.Errorf("nomor telepon terlalu pendek: %s", phone)
+	}
+
+	ctx := context.Background()
+
+	// Connect dulu untuk buka websocket
+	if err := s.Client.Connect(); err != nil {
+		return "", fmt.Errorf("gagal connect: %w", err)
+	}
+
+	// Tunggu sebentar agar websocket stabil
+	done := make(chan struct{})
+	go func() {
+		for i := 0; i < 30; i++ {
+			if s.Client.IsConnected() {
+				close(done)
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		close(done)
+	}()
+	<-done
+
+	if !s.Client.IsConnected() {
+		return "", fmt.Errorf("gagal connect ke WhatsApp server")
+	}
+
+	// Generate pairing code
+	code, err := s.Client.PairPhone(ctx, phone, true, whatsmeow.PairClientChrome, "Chrome (Linux)")
+	if err != nil {
+		s.Client.Disconnect()
+		return "", fmt.Errorf("gagal generate pairing code: %w", err)
+	}
+
+	return code, nil
 }
 
 // Send mengirim pesan teks ke satu nomor.
@@ -157,7 +169,6 @@ func (s *WhatsAppService) SendDocument(phone, fileName string, data []byte) erro
 
 	ctx := context.Background()
 
-	// Upload dulu file ke server WhatsApp, lalu rujuk dalam pesan dokumen.
 	resp, err := s.Client.Upload(ctx, data, whatsmeow.MediaDocument)
 	if err != nil {
 		return fmt.Errorf("gagal upload dokumen: %w", err)
@@ -181,9 +192,9 @@ func (s *WhatsAppService) SendDocument(phone, fileName string, data []byte) erro
 	return err
 }
 
-// IsConnected mengecek apakah WhatsApp sudah terhubung.
+// IsConnected mengecek apakah WhatsApp sudah terhubung dan device JID tersimpan.
 func (s *WhatsAppService) IsConnected() bool {
-	return s.Client != nil && s.Client.IsConnected()
+	return s.Client != nil && s.Client.IsConnected() && s.Client.Store != nil && s.Client.Store.ID != nil
 }
 
 // Close memutus koneksi saat backend dimatikan.
@@ -193,13 +204,10 @@ func (s *WhatsAppService) Close() {
 	}
 }
 
-// normalizeJID mengubah nomor 08xx menjadi format internasional 628xx
-// yang dipahami oleh WhatsApp.
 func normalizeJID(phone string) (types.JID, error) {
 	phone = strings.TrimSpace(phone)
 	phone = strings.TrimPrefix(phone, "+")
 
-	// Sisakan hanya angka
 	var digits strings.Builder
 	for _, r := range phone {
 		if r >= '0' && r <= '9' {
@@ -208,7 +216,6 @@ func normalizeJID(phone string) (types.JID, error) {
 	}
 	phone = digits.String()
 
-	// 08... -> 628...
 	if strings.HasPrefix(phone, "0") {
 		phone = "62" + phone[1:]
 	}

@@ -51,8 +51,8 @@ func (s *ClientService) GetClients(ctx context.Context, search, status string, p
 	}
 	offset := (page - 1) * limit
 
-	countQuery := `SELECT COUNT(id) FROM clients WHERE 1=1`
-	dataQuery := `SELECT id, profile_id, company_name, pic_name, email, phone, address, status, created_at, updated_at FROM clients WHERE 1=1`
+	countQuery := `SELECT COUNT(*) FROM clients c JOIN profiles p ON p.id = c.profile_id WHERE p.role = 'CLIENT'`
+	dataQuery := `SELECT c.id, c.profile_id, c.company_name, c.pic_name, c.email, c.phone, c.address, c.status, c.created_at, c.updated_at FROM clients c JOIN profiles p ON p.id = c.profile_id WHERE p.role = 'CLIENT'`
 
 	var args []interface{}
 	argID := 1

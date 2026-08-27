@@ -16,6 +16,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { getClientInvoices } from "../../services/invoiceApi";
 import { getClientPayments } from "../../services/paymentApi";
+import { getProducts } from "../../services/productApi";
 import { formatDate, formatRupiah } from "../../utils/format";
 
 const daysLeftLabel = (days) => {
@@ -78,7 +79,8 @@ function DonutChart({ segments }) {
 }
 
 function getInvoiceTotal(invoice) {
-  return invoice.subtotal + invoice.tax - invoice.discount;
+  if (invoice.total != null) return invoice.total;
+  return (invoice.subtotal || 0) + (invoice.tax || 0);
 }
 
 function daysUntil(dueDate) {
@@ -94,6 +96,7 @@ export default function ClientDashboard() {
   const { user, client, accessToken } = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -103,12 +106,14 @@ export default function ClientDashboard() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [invData, payData] = await Promise.all([
+        const [invData, payData, prodData] = await Promise.all([
           getClientInvoices(accessToken),
           getClientPayments(accessToken),
+          getProducts(),
         ]);
         setInvoices(invData || []);
         setPayments(payData || []);
+        setProducts(prodData || []);
       } catch (err) {
         setError("Gagal memuat data dashboard");
       } finally {
@@ -160,26 +165,29 @@ export default function ClientDashboard() {
     [invoices]
   );
 
-  // Compute active product from latest PAID/APPROVED invoice
+  // Compute active product from latest PAID/APPROVED invoice, joined with the
+  // real product catalog (name, features, price) by product_id.
   const activeProduct = useMemo(() => {
     const paidInvoices = invoices
       .filter((inv) => inv.status === "PAID")
       .sort((a, b) => new Date(b.invoice_date) - new Date(a.invoice_date));
-    
+
     if (paidInvoices.length > 0) {
       const invoice = paidInvoices[0];
+      const item = invoice.items?.[0];
+
+      const matched = item?.product_id
+        ? products.find((p) => String(p.id) === String(item.product_id))
+        : null;
+
+      const billingCycle = item?.billing_cycle || "monthly";
+      const isMonthly = /bulan|month/i.test(billingCycle);
+
       return {
-        name: invoice.notes || invoice.invoice_number || "Produk",
-        billingType: "Bulanan",
-        price: invoice.total || invoice.subtotal || 0,
-        features: [
-          "SSD Storage 1 GB",
-          "Bandwidth Unlimited",
-          "1 Domain",
-          "SSL Gratis",
-          "Backup Harian",
-          "cPanel Control Panel"
-        ],
+        name: matched?.name || item?.product_name || invoice.invoice_number || "Produk",
+        billingType: isMonthly ? "Bulanan" : "Tahunan",
+        price: matched?.price ?? item?.price ?? invoice.total ?? invoice.subtotal ?? 0,
+        features: matched?.features || [],
         renewsOn: invoice.due_date ? new Date(invoice.due_date).toLocaleDateString("id-ID", {
           day: "numeric",
           month: "long",
@@ -188,7 +196,7 @@ export default function ClientDashboard() {
       };
     }
     return null;
-  }, [invoices]);
+  }, [invoices, products]);
 
   if (loading) {
     return (
@@ -400,7 +408,7 @@ export default function ClientDashboard() {
                     <p className="text-right text-lg font-bold text-brand-600">
                       {formatRupiah(activeProduct.price)}
                       <span className="block text-[11px] font-medium text-slate-500">
-                        per bulan
+                        per {activeProduct.billingType === "Tahunan" ? "tahun" : "bulan"}
                       </span>
                     </p>
                   </div>
@@ -512,21 +520,23 @@ export default function ClientDashboard() {
                     key={invoice.id}
                     role="button"
                     tabIndex={0}
-                    onClick={() => navigate(`/client/invoices/${invoice.id}`)}
+                    onClick={() => navigate(`/client/invoices/${invoice.invoice_number}`)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") {
-                        navigate(`/client/invoices/${invoice.id}`);
+                        navigate(`/client/invoices/${invoice.invoice_number}`);
                       }
                     }}
                     className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-200 p-3 text-left transition hover:border-brand-300"
                   >
                     <div>
                       <p className="text-sm font-semibold text-slate-900">
-                        {invoice.product}
+                        {invoice.items?.length > 0
+                          ? invoice.items.map((i) => i.product_name).join(", ")
+                          : invoice.invoice_number}
                       </p>
 
                       <p className="mt-0.5 text-xs text-slate-500">
-                        {invoice.id} · {formatRupiah(getInvoiceTotal(invoice))}
+                        {invoice.invoice_number} · {formatRupiah(getInvoiceTotal(invoice))}
                       </p>
                     </div>
 
@@ -545,7 +555,7 @@ export default function ClientDashboard() {
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();
-                          navigate(`/client/payments?invoice=${invoice.id}`);
+                          navigate(`/client/payments?invoice=${invoice.invoice_number}`);
                         }}
                         className="rounded-lg bg-brand-600/10 px-2.5 py-1 text-xs font-bold text-brand-700 transition hover:bg-brand-600 hover:text-white"
                       >
@@ -615,15 +625,17 @@ export default function ClientDashboard() {
                   return (
                     <tr
                       key={invoice.id}
-                      onClick={() => navigate(`/client/invoices/${invoice.id}`)}
+                      onClick={() => navigate(`/client/invoices/${invoice.invoice_number}`)}
                       className="cursor-pointer border-b border-slate-200 last:border-0 hover:bg-brand-50"
                     >
                       <td className="px-5 py-3.5 font-semibold text-brand-600">
-                        {invoice.id}
+                        {invoice.invoice_number}
                       </td>
 
                       <td className="px-5 py-3.5 text-slate-600">
-                        {invoice.product}
+                        {invoice.items?.length > 0
+                          ? invoice.items.map((i) => i.product_name).join(", ")
+                          : "—"}
                       </td>
 
                       <td className="px-5 py-3.5 text-slate-600">

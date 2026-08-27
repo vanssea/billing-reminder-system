@@ -160,11 +160,11 @@ export default function PaymentsView({ role = "admin" }) {
   const panelTitle = role === "superadmin" ? "Payment Management" : "Payments";
 
   return (
-    <div className="min-h-screen bg-[#fcf8ff] flex">
+    <div className="min-h-screen bg-[#fcf8ff] pt-16 app-content">
       <Sidebar role={role} />
       <Header role={role} />
 
-      <main className="flex-1 mt-20 md:ml-[280px] p-4 sm:p-6 lg:p-8 w-full overflow-x-hidden">
+      <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
         {/* Banner */}
         <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#3525cd] to-[#5b44f3] p-6 text-white shadow-lg">
           <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
@@ -380,7 +380,7 @@ export default function PaymentsView({ role = "admin" }) {
                     <>
                       <div>
                         <p className="text-xs font-medium uppercase tracking-wide text-[#9a97a9]">Diverifikasi Oleh</p>
-                        <p className="truncate text-sm font-semibold text-[#191c1e]">{detailTarget.verified_by || "-"}</p>
+                        <p className="truncate text-sm font-semibold text-[#191c1e]">{detailTarget.verified_by_name || detailTarget.verified_by || "-"}</p>
                       </div>
                       <div>
                         <p className="text-xs font-medium uppercase tracking-wide text-[#9a97a9]">Waktu Verifikasi</p>

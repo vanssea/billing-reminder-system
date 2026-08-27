@@ -24,7 +24,8 @@ const paymentStatusConfig = {
 };
 
 function getInvoiceTotal(invoice) {
-  return invoice.subtotal + invoice.tax - invoice.discount;
+  if (invoice.total != null) return invoice.total;
+  return (invoice.subtotal || 0) + (invoice.tax || 0);
 }
 
 export default function ClientInvoices() {
@@ -74,9 +75,10 @@ export default function ClientInvoices() {
   );
 
   const filtered = sortedInvoices.filter((invoice) => {
-    const matchesQuery = invoice.id
-      .toLowerCase()
-      .includes(query.trim().toLowerCase());
+    const q = query.trim().toLowerCase();
+    const matchesQuery = !q ||
+      invoice.invoice_number?.toLowerCase().includes(q) ||
+      invoice.id.toLowerCase().includes(q);
     const matchesStatus = status === "ALL" || invoice.status === status;
     const matchesFrom = !fromDate || invoice.due_date >= fromDate;
     const matchesTo = !toDate || invoice.due_date <= toDate;
@@ -216,20 +218,22 @@ export default function ClientInvoices() {
                     ? paymentStatusConfig[payment.verification_status]
                     : null;
                   const isPayable =
-                    invoice.status === "UNPAID" || invoice.status === "OVERDUE";
+                    invoice.status === "UNPAID" || invoice.status === "OVERDUE" || invoice.status === "SENT";
 
                   return (
                     <tr
                       key={invoice.id}
-                      onClick={() => navigate(`/client/invoices/${invoice.id}`)}
+                      onClick={() => navigate(`/client/invoices/${invoice.invoice_number}`)}
                       className="cursor-pointer border-b border-slate-200 last:border-0 hover:bg-brand-50"
                     >
                       <td className="px-5 py-3.5 font-semibold text-brand-600">
-                        {invoice.id}
+                        {invoice.invoice_number}
                       </td>
 
                       <td className="px-5 py-3.5 text-slate-600">
-                        {invoice.product}
+                        {invoice.items?.length > 0
+                          ? invoice.items.map((i) => i.product_name).join(", ")
+                          : "—"}
                       </td>
 
                       <td className="px-5 py-3.5 text-slate-600">
@@ -276,7 +280,7 @@ export default function ClientInvoices() {
                               type="button"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                navigate(`/client/payments?invoice=${invoice.id}`);
+                                navigate(`/client/payments?invoice=${invoice.invoice_number}`);
                               }}
                               aria-label={`Bayar ${invoice.id}`}
                               title="Bayar"
@@ -291,11 +295,11 @@ export default function ClientInvoices() {
                             type="button"
                             onClick={(event) => {
                               event.stopPropagation();
-                              navigate(`/client/invoices/${invoice.id}`, {
-                                state: { print: true },
+                              navigate(`/client/invoices/${invoice.invoice_number}`, {
+                                state: { pdf: true },
                               });
                             }}
-                            aria-label={`Download PDF ${invoice.id}`}
+                            aria-label={`Download PDF ${invoice.invoice_number}`}
                             title="Download PDF"
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-600"
                           >

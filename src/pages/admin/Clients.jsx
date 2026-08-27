@@ -350,10 +350,9 @@ export default function AdminClients() {
           </div>
         )}
 
-        {/* Table Card */}
-        <div className="overflow-hidden rounded-xl border border-[#e0e3e5] bg-white shadow-sm">
-          {/* Toolbar */}
-          <div className="flex flex-col gap-4 border-b border-[#e0e3e5] p-4 lg:flex-row lg:items-center">
+        {/* Search & Filter */}
+        <div className="mb-6 rounded-2xl border border-[#e5e2ea] bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9a97a9]" />
               <input
@@ -361,7 +360,7 @@ export default function AdminClients() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Cari nama atau email client..."
-                className="w-full rounded-lg border border-[#c7c4d8] bg-white py-2 pl-9 pr-3 text-sm text-[#191c1e] outline-none transition focus:border-[#3525cd] focus:ring-2 focus:ring-[#3525cd]/20"
+                className="w-full rounded-xl border border-[#e0e3e5] bg-white py-2.5 pl-9 pr-3 text-sm text-[#191c1e] shadow-sm outline-none transition focus:border-[#3525cd] focus:ring-2 focus:ring-[#3525cd]/20"
               />
             </div>
 
@@ -380,7 +379,10 @@ export default function AdminClients() {
               ))}
             </div>
           </div>
+        </div>
 
+        {/* Table Card */}
+        <div className="overflow-hidden rounded-xl border border-[#e0e3e5] bg-white shadow-sm">
           {/* Table */}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[940px] text-left text-sm">

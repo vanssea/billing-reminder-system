@@ -134,7 +134,8 @@ const filteredInvoices = useMemo(() => {
 
   const openEdit = async (inv) => {
     try {
-      const detail = await getInvoiceById(inv.id, accessToken);
+      const res = await getInvoiceById(inv.id, accessToken);
+      const detail = res.invoice || res;
       setEditingId(inv.id);
       setForm({
         invoice_number: detail.invoice_number || "",
@@ -356,7 +357,7 @@ const filteredInvoices = useMemo(() => {
                         <td className="px-4 py-3"><StatusBadge status={inv.status} /></td> 
                         <td className="px-4 py-3"> 
                           <div className="flex justify-end gap-1.5">
-                            <button type="button" onClick={async () => { try { const detail = await getInvoiceById(inv.id, accessToken); setDetailTarget(detail); } catch (err) { setError(err.message || "Gagal mengambil detail invoice"); } }} title="Detail" className="flex h-8 w-8 items-center justify-center rounded-md bg-[#3525cd]/10 text-[#3525cd] transition hover:bg-[#3525cd]/20"><Eye className="h-4 w-4" /></button>
+                            <button type="button" onClick={async () => { try { const res = await getInvoiceById(inv.id, accessToken); setDetailTarget(res.invoice || res); } catch (err) { setError(err.message || "Gagal mengambil detail invoice"); } }} title="Detail" className="flex h-8 w-8 items-center justify-center rounded-md bg-[#3525cd]/10 text-[#3525cd] transition hover:bg-[#3525cd]/20"><Eye className="h-4 w-4" /></button>
                             <button type="button" onClick={() => openEdit(inv)} title="Edit" className="flex h-8 w-8 items-center justify-center rounded-md bg-[#f59e0b]/10 text-[#d97706] transition hover:bg-[#f59e0b]/20"><Pencil className="h-4 w-4" /></button>
                             <button type="button" onClick={() => setDeleteTarget(inv)} title="Hapus" className="flex h-8 w-8 items-center justify-center rounded-md bg-[#dc2626]/10 text-[#dc2626] transition hover:bg-[#dc2626]/20"><Trash2 className="h-4 w-4" /></button>
                           </div> 

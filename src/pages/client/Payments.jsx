@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Clock,
@@ -13,7 +13,12 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { getClientInvoices } from "../../services/invoiceApi";
-import { getClientPayments, createPayment } from "../../services/paymentApi";
+import {
+  getClientPayments,
+  createPayment,
+  uploadPaymentProof,
+  validatePaymentProofFile,
+} from "../../services/paymentApi";
 import { formatDate, formatRupiah } from "../../utils/format";
 
 const paymentStatusConfig = {
@@ -23,12 +28,9 @@ const paymentStatusConfig = {
 };
 
 const paymentMethods = [
-  "Transfer Bank BCA",
-  "Transfer Bank BNI",
-  "Transfer Bank Mandiri",
-  "Virtual Account",
-  "E-Wallet (GoPay / OVO / DANA)",
-  "QRIS",
+  { value: "BANK_TRANSFER", label: "Transfer Bank" },
+  { value: "CASH", label: "Cash" },
+  { value: "OTHER", label: "Lainnya" },
 ];
 
 const paymentInstructions = {
@@ -45,9 +47,21 @@ function getVirtualAccountNumber(invoiceId) {
   return `88008${invoiceId.replace(/\D/g, "")}`;
 }
 
-function getInvoiceTotal(invoice) {
-  return invoice.subtotal + invoice.tax - invoice.discount;
+function getPaymentMethodLabel(value) {
+  const method = paymentMethods.find((m) => m.value === value);
+  return method?.label ?? value;
 }
+
+function getInvoiceTotal(invoice) {
+  if (invoice.total != null) return invoice.total;
+  return (invoice.subtotal || 0) + (invoice.tax || 0);
+}
+
+// Format angka nominal dengan pemisah ribuan titik (id-ID), mis. 500000 -> 500.000
+const formatNominal = (digits) => {
+  const clean = String(digits ?? "").replace(/\D/g, "");
+  return clean ? Number(clean).toLocaleString("id-ID") : "";
+};
 
 const TODAY = new Date().toISOString().split("T")[0];
 
@@ -56,6 +70,7 @@ const emptyForm = {
   amount: "",
   paymentDate: TODAY,
   paymentMethod: "",
+  proofFile: null,
   proofName: "",
 };
 
@@ -76,6 +91,7 @@ export default function ClientPayments() {
   const [formError, setFormError] = useState("");
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("ALL");
+  const [previewUrl, setPreviewUrl] = useState(null);
 
   useEffect(() => {
     if (!client || !accessToken) return;
@@ -101,12 +117,16 @@ export default function ClientPayments() {
 
   useEffect(() => {
     if (searchParams.get("invoice")) {
-      const invoiceId = searchParams.get("invoice");
-      const invoice = invoices.find((item) => item.id === invoiceId);
-      const payment = payments.find((p) => p.invoice_id === invoiceId);
+      const invoiceParam = searchParams.get("invoice");
+      const invoice = invoices.find(
+        (item) => item.invoice_number === invoiceParam || item.id === invoiceParam
+      );
+      const payment = invoice
+        ? payments.find((p) => p.invoice_id === invoice.id)
+        : null;
       const canPreselect =
         Boolean(invoice) &&
-        (invoice.status === "UNPAID" || invoice.status === "OVERDUE") &&
+        (invoice.status === "UNPAID" || invoice.status === "OVERDUE" || invoice.status === "SENT") &&
         (!payment || payment.verification_status === "REJECTED");
 
       if (canPreselect) {
@@ -115,6 +135,7 @@ export default function ClientPayments() {
           amount: String(getInvoiceTotal(invoice)),
           paymentDate: TODAY,
           paymentMethod: payment?.payment_method ?? "",
+          proofFile: null,
           proofName: "",
         });
         setOpen(true);
@@ -123,8 +144,18 @@ export default function ClientPayments() {
     }
   }, [searchParams, setSearchParams, invoices, payments]);
 
+  useEffect(() => {
+    if (!form.proofFile) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(form.proofFile);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [form.proofFile]);
+
   const outstanding = invoices
-    .filter((invoice) => invoice.status === "UNPAID" || invoice.status === "OVERDUE")
+    .filter((invoice) => invoice.status === "UNPAID" || invoice.status === "OVERDUE" || invoice.status === "SENT")
     .reduce((sum, invoice) => sum + getInvoiceTotal(invoice), 0);
 
   const pendingCount = payments.filter((payment) => payment.verification_status === "PENDING").length;
@@ -154,7 +185,7 @@ export default function ClientPayments() {
       : payments.filter((payment) => payment.verification_status === filter).length;
 
   const eligibleInvoices = invoices.filter((invoice) => {
-    if (invoice.status !== "UNPAID" && invoice.status !== "OVERDUE") return false;
+    if (invoice.status !== "UNPAID" && invoice.status !== "OVERDUE" && invoice.status !== "SENT") return false;
 
     const payment = payments.find((p) => p.invoice_id === invoice.id);
 
@@ -170,6 +201,7 @@ export default function ClientPayments() {
       amount: prefill ? String(prefill.amount) : "",
       paymentDate: TODAY,
       paymentMethod: prefill?.payment_method ?? "",
+      proofFile: null,
       proofName: "",
     });
     setOpen(true);
@@ -208,8 +240,14 @@ export default function ClientPayments() {
       return;
     }
 
-    if (!form.proofName) {
+    if (!form.proofFile) {
       setFormError("Upload bukti pembayaran terlebih dahulu.");
+      return;
+    }
+
+    const fileError = validatePaymentProofFile(form.proofFile);
+    if (fileError) {
+      setFormError(fileError);
       return;
     }
 
@@ -222,6 +260,8 @@ export default function ClientPayments() {
     setFormError("");
 
     try {
+      const { publicUrl } = await uploadPaymentProof(form.proofFile, client.id);
+
       await createPayment(
         {
           invoice_id: form.invoiceId,
@@ -229,7 +269,7 @@ export default function ClientPayments() {
           amount: Number(form.amount),
           payment_date: form.paymentDate,
           payment_method: form.paymentMethod,
-          proof_url: form.proofName,
+          proof_url: publicUrl,
         },
         accessToken
       );
@@ -238,7 +278,6 @@ export default function ClientPayments() {
       setBanner(
         `Bukti pembayaran untuk ${form.invoiceId} berhasil diupload. Status: Menunggu verifikasi admin.`
       );
-      // Refresh payments
       const payData = await getClientPayments(accessToken);
       setPayments(payData || []);
     } catch (err) {
@@ -440,19 +479,25 @@ export default function ClientPayments() {
                       className="border-b border-slate-200 last:border-0 hover:bg-brand-50"
                     >
                       <td className="px-5 py-3.5 font-semibold text-slate-900">
-                        {payment.payment_id}
+                        PAY-{payment.payment_id.slice(0, 8).toUpperCase()}
                       </td>
 
                       <td className="px-5 py-3.5">
                         <button
                           type="button"
-                          onClick={() => navigate(`/client/invoices/${payment.invoice_id}`)}
+                          onClick={() => {
+                            const inv = invoices.find((i) => i.id === payment.invoice_id);
+                            navigate(`/client/invoices/${inv?.invoice_number || payment.invoice_id}`);
+                          }}
                           className="font-semibold text-brand-600 transition hover:text-brand-700"
                         >
-                          {payment.invoice_id}
+                          {(() => {
+                            const inv = invoices.find((i) => i.id === payment.invoice_id);
+                            return inv?.invoice_number || payment.invoice_id;
+                          })()}
                         </button>
 
-                        <p className="text-xs text-slate-400">{invoice?.product}</p>
+                        <p className="text-xs text-slate-400">{invoice?.items?.length > 0 ? invoice.items.map((i) => i.product_name).join(", ") : ""}</p>
                       </td>
 
                       <td className="px-5 py-3.5 font-semibold text-slate-900">
@@ -464,14 +509,23 @@ export default function ClientPayments() {
                       </td>
 
                       <td className="px-5 py-3.5 text-slate-600">
-                        {payment.payment_method}
+                        {getPaymentMethodLabel(payment.payment_method)}
                       </td>
 
                       <td className="px-5 py-3.5">
-                        <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                          <FileText size={14} className="text-brand-600" />
-                          {payment.proof_url}
-                        </span>
+                        {payment.proof_url ? (
+                          <a
+                            href={payment.proof_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-600 transition hover:bg-brand-100"
+                          >
+                            <FileText size={13} />
+                            Lihat Bukti
+                          </a>
+                        ) : (
+                          <span className="text-xs text-slate-400">-</span>
+                        )}
                       </td>
 
                       <td className="px-5 py-3.5">
@@ -573,7 +627,7 @@ export default function ClientPayments() {
 
                   {eligibleInvoices.map((invoice) => (
                     <option key={invoice.id} value={invoice.id}>
-                      {invoice.id} · {invoice.product}
+                      {invoice.invoice_number} · {invoice.items?.length > 0 ? invoice.items.map((i) => i.product_name).join(", ") : ""}
                     </option>
                   ))}
                 </select>
@@ -582,7 +636,7 @@ export default function ClientPayments() {
               {selectedInvoice && (
                 <div className="flex items-center justify-between rounded-xl bg-brand-50 px-4 py-3">
                   <p className="text-xs font-semibold text-slate-600">
-                    Total tagihan {selectedInvoice.id}
+                    Total tagihan {selectedInvoice.invoice_number}
                   </p>
 
                   <p className="text-sm font-bold text-brand-700">
@@ -598,10 +652,14 @@ export default function ClientPayments() {
                   </label>
 
                   <input
-                    type="number"
-                    value={form.amount}
+                    type="text"
+                    inputMode="numeric"
+                    value={formatNominal(form.amount)}
                     onChange={(event) =>
-                      setForm((prev) => ({ ...prev, amount: event.target.value }))
+                      setForm((prev) => ({
+                        ...prev,
+                        amount: event.target.value.replace(/\D/g, ""),
+                      }))
                     }
                     placeholder="0"
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-brand-500"
@@ -645,8 +703,8 @@ export default function ClientPayments() {
                   <option value="">Pilih metode...</option>
 
                   {paymentMethods.map((method) => (
-                    <option key={method} value={method}>
-                      {method}
+                    <option key={method.value} value={method.value}>
+                      {method.label}
                     </option>
                   ))}
                 </select>
@@ -657,21 +715,51 @@ export default function ClientPayments() {
                   Bukti Pembayaran
                 </label>
 
-                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm font-semibold text-slate-500 transition hover:border-brand-400 hover:text-brand-600">
-                  <Upload size={16} />
-                  {form.proofName || "Klik untuk pilih file (demo)"}
+                {form.proofFile && previewUrl ? (
+                  <div className="relative rounded-xl border border-slate-200 bg-white p-3">
+                    <img
+                      src={previewUrl}
+                      alt="Preview bukti"
+                      className="mx-auto max-h-[180px] rounded-lg object-contain"
+                    />
+                    <p className="mt-2 truncate text-center text-xs font-medium text-slate-600">
+                      {form.proofName}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          proofFile: null,
+                          proofName: "",
+                        }))
+                      }
+                      className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow transition hover:bg-red-600"
+                      aria-label="Hapus file"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm font-semibold text-slate-500 transition hover:border-brand-400 hover:text-brand-600">
+                    <Upload size={16} />
+                    Upload bukti (png atau jpg)
 
-                  <input
-                    type="file"
-                    className="hidden"
-                    onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        proofName: event.target.files?.[0]?.name ?? "",
-                      }))
-                    }
-                  />
-                </label>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        setForm((prev) => ({
+                          ...prev,
+                          proofFile: file,
+                          proofName: file?.name ?? "",
+                        }));
+                      }}
+                    />
+                  </label>
+                )}
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -723,8 +811,8 @@ export default function ClientPayments() {
               )}
             </button>
 
-            <p className="mt-3 text-center text-xs text-slate-500">
-              Bukti akan diverifikasi admin. (demo)
+              <p className="mt-3 text-center text-xs text-slate-500">
+              Bukti akan diverifikasi oleh admin.
             </p>
           </div>
         </div>

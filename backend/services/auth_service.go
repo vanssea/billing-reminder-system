@@ -110,19 +110,6 @@ func (s *AuthService) Register(req models.RegisterRequest) (*models.AuthUser, er
 
 	profile.Email = req.Email
 
-	// Buat client record via ClientService (handle upsert)
-	_, err = s.ClientService.CreateOrUpdateClientByProfileID(profile.ID, UpdateClientRequest{
-		CompanyName: "",
-		PICName:     req.FullName,
-		Email:       req.Email,
-		Phone:       nil,
-		Address:     nil,
-		Status:      "ACTIVE",
-	})
-	if err != nil {
-		return nil, fmt.Errorf("gagal membuat client record: %w", err)
-	}
-
 	return &profile, nil
 }
 

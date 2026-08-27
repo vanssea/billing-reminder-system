@@ -3,12 +3,13 @@ package models
 import "time"
 
 type DashboardStats struct {
-	TotalInvoices   int `json:"total_invoices"`
-	SentInvoices    int `json:"sent_invoices"`
-	PaidInvoices    int `json:"paid_invoices"`
-	UnpaidInvoices  int `json:"unpaid_invoices"`
-	OverdueInvoices int `json:"overdue_invoices"`
-	PendingPayments int `json:"pending_payments"`
+	TotalInvoices    int `json:"total_invoices"`
+	SentInvoices     int `json:"sent_invoices"`
+	PaidInvoices     int `json:"paid_invoices"`
+	UnpaidInvoices   int `json:"unpaid_invoices"`
+	OverdueInvoices  int `json:"overdue_invoices"`
+	PendingPayments  int `json:"pending_payments"`
+	PendingPurchases int `json:"pending_purchases"`
 }
 
 type UpcomingInvoice struct {
