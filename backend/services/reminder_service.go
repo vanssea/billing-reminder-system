@@ -186,15 +186,26 @@ func CreateRemindersForInvoice(
 	createdAt time.Time,
 	dueDate time.Time,
 ) error {
+	settings := getReminderSettings(ctx, tx)
+	hour, minute, _ := parseSendTime(settings.SendTime)
+
+	enabled := make(map[string]bool, len(settings.EnabledTypes))
+	for _, t := range settings.EnabledTypes {
+		enabled[t] = true
+	}
+
 	for _, rt := range reminderTypeOffsets {
+		if !enabled[rt.Type] {
+			continue
+		}
 		// scheduled_date = due_date - N hari
-		// scheduled_at   = scheduled_date pukul 08:00 Asia/Jakarta (WIB)
+		// scheduled_at   = scheduled_date pukul send_time Asia/Jakarta (WIB)
 		offsetDate := dueDate.AddDate(0, 0, -rt.Days)
 		scheduledAt := time.Date(
 			offsetDate.Year(),
 			offsetDate.Month(),
 			offsetDate.Day(),
-			8, 0, 0, 0,
+			hour, minute, 0, 0,
 			jakartaLocation,
 		)
 
@@ -235,13 +246,24 @@ func RescheduleRemindersForInvoice(
 	createdAt time.Time,
 	dueDate time.Time,
 ) error {
+	settings := getReminderSettings(ctx, tx)
+	hour, minute, _ := parseSendTime(settings.SendTime)
+
+	enabled := make(map[string]bool, len(settings.EnabledTypes))
+	for _, t := range settings.EnabledTypes {
+		enabled[t] = true
+	}
+
 	for _, rt := range reminderTypeOffsets {
+		if !enabled[rt.Type] {
+			continue
+		}
 		offsetDate := dueDate.AddDate(0, 0, -rt.Days)
 		scheduledAt := time.Date(
 			offsetDate.Year(),
 			offsetDate.Month(),
 			offsetDate.Day(),
-			8, 0, 0, 0,
+			hour, minute, 0, 0,
 			jakartaLocation,
 		)
 

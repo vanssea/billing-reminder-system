@@ -10,7 +10,7 @@ const statusFilters = ["ALL", "SENT", "UNPAID", "OVERDUE", "PAID", "CANCELLED"];
 
 const invoiceStatusConfig = {
   DRAFT: { label: "Draft", badge: "bg-slate-100 text-slate-600" },
-  SENT: { label: "Terkirim", badge: "bg-blue-50 text-blue-600" },
+  SENT: { label: "Belum Lunas", badge: "bg-amber-50 text-amber-700" },
   UNPAID: { label: "Belum Dibayar", badge: "bg-amber-50 text-amber-700" },
   OVERDUE: { label: "Overdue", badge: "bg-red-50 text-red-600" },
   PAID: { label: "Lunas", badge: "bg-green-50 text-green-600" },

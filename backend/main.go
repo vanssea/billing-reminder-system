@@ -50,6 +50,7 @@ func main() {
 	reminderService.WhatsApp = waService
 	reminderService.PDF = pdfService
 	appNotificationService := services.NewAppNotificationService(db)
+	settingsService := services.NewSettingsService(db)
 
 	// Membuat handler
 	clientHandler := handlers.NewClientHandler(clientService, authService)
@@ -64,6 +65,7 @@ func main() {
 	reminderHandler := handlers.NewReminderHandler(reminderService)
 	whatsappHandler := handlers.NewWhatsAppHandler(waService, pdfService)
 	appNotificationHandler := handlers.NewAppNotificationHandler(appNotificationService, authService)
+	settingsHandler := handlers.NewSettingsHandler(settingsService)
 
 	// Setup router
 	router := chi.NewRouter()
@@ -109,6 +111,7 @@ func main() {
 	routes.PaymentRoutes(router, paymentHandler, authService)
 	routes.WhatsAppRoutes(router, whatsappHandler, authService)
 	routes.AppNotificationRoutes(router, appNotificationHandler, authService)
+	routes.SettingsRoutes(router, settingsHandler, authService)
 
 	// Menjalankan scheduler reminder di background (H-30 s/d H-1 + overdue)
 	go reminderService.StartReminderScheduler(context.Background())
@@ -138,6 +141,7 @@ func main() {
 	log.Println("API Reminders: http://localhost:8080/api/reminders")
 	log.Println("API Payments: http://localhost:8080/api/payments")
 	log.Println("API Notifications: http://localhost:8080/api/notifications")
+	log.Println("API Settings: http://localhost:8080/api/admin/settings")
 	log.Println("=================================")
 
 	err = server.ListenAndServe()

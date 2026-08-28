@@ -1,5 +1,4 @@
 const API_URL = "http://localhost:8080/api/admin/clients";
-const DELETE_API_URL = "http://localhost:8080/api/clients";
 
 function authHeaders(token, extra = {}) {
   return {
@@ -58,7 +57,7 @@ export async function updateClient(id, data, token) {
 }
 
 export async function deleteClient(id, token) {
-  const response = await fetch(`${DELETE_API_URL}/${id}`, {
+  const response = await fetch(`${API_URL}/${id}`, {
     method: "DELETE",
     headers: authHeaders(token),
   });

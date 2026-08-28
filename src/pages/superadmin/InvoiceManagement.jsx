@@ -1,12 +1,12 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import {
   Search, X, Eye, FileText, Receipt,
   CheckCircle2, Clock, AlertTriangle, Users, Loader2,
-  Plus, Pencil, Trash2, ArrowDown, ArrowUp,
+  Plus, Pencil, Trash2, ArrowDown, ArrowUp, Send, XCircle,
 } from "lucide-react";
-import { getInvoices, getInvoiceById, createInvoice, updateInvoice, deleteInvoice } from "../../services/invoiceApi";
+import { getInvoices, getInvoiceById, createInvoice, updateInvoice, deleteInvoice, sendInvoice } from "../../services/invoiceApi";
 import { getClients } from "../../services/clientApi";
 import { getProducts } from "../../services/productApi";
 import { useAuth } from "../../context/AuthContext";
@@ -23,6 +23,10 @@ const statusConfig = {
   OVERDUE: { label: "Terlambat", dot: "bg-[#ef4444]", bg: "bg-[#fef2f2]", text: "text-[#dc2626]", border: "border-[#fecdd3]" }, 
   CANCELLED: { label: "Dibatalkan", dot: "bg-[#64748b]", bg: "bg-[#f8fafc]", text: "text-[#475569]", border: "border-[#cbd5e1]" }, 
 }; 
+// Status yang boleh di-set manual lewat form edit (PAID hanya dari approval
+// pembayaran, OVERDUE dari scheduler, CANCELLED lewat tombol Batalkan).
+const EDITABLE_STATUSES = ["DRAFT", "SENT", "UNPAID"];
+const LOCKED_STATUSES = ["PAID", "OVERDUE", "CANCELLED"]; 
 function StatusBadge({ status }) { 
   const c = statusConfig[status] || statusConfig.UNPAID; 
   return ( 
@@ -49,6 +53,9 @@ export default function InvoiceManagement() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [sendTarget, setSendTarget] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [downloading, setDownloading] = useState(false);
   const [formErrors, setFormErrors] = useState({});
   const [form, setForm] = useState({ invoice_number: "", client_id: "", invoice_date: "", due_date: "", status: "DRAFT", notes: "", items: [{ product_id: "", quantity: 1 }] });
  
@@ -65,9 +72,9 @@ export default function InvoiceManagement() {
   }, [accessToken]);
  
   useEffect(() => {
-    document.body.style.overflow = detailTarget || modalOpen || deleteTarget ? "hidden" : "";
+    document.body.style.overflow = detailTarget || modalOpen || deleteTarget || sendTarget || cancelTarget ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [detailTarget, modalOpen, deleteTarget]);
+  }, [detailTarget, modalOpen, deleteTarget, sendTarget, cancelTarget]);
 
   useEffect(() => {
     if (!success) return;
@@ -76,7 +83,7 @@ export default function InvoiceManagement() {
   }, [success]);
  
   const stats = useMemo(() => [ 
-    { title: "Total Invoice", value: invoices.length, description: "Semua invoice terdaftar", icon: FileText, className: "bg-gradient-to-r from-[#2563eb] to-[#3b82f6]" }, 
+    { title: "Total Invoice", value: invoices.filter((i) => i.status !== "DRAFT").length, description: "Semua invoice terdaftar (non-draft)", icon: FileText, className: "bg-gradient-to-r from-[#2563eb] to-[#3b82f6]" }, 
     { title: "Lunas", value: invoices.filter((i) => i.status === "PAID").length, description: "Invoice yang sudah dibayar", icon: CheckCircle2, className: "bg-gradient-to-r from-[#0d9488] to-[#14b8a6]" }, 
     { title: "Belum Lunas", value: invoices.filter((i) => i.status === "UNPAID" || i.status === "SENT" || i.status === "OVERDUE").length, description: "Invoice yang belum dibayar (terkirim, belum bayar, terlambat)", icon: Clock, className: "bg-gradient-to-r from-[#f59e0b] to-[#fbbf24]" },
     { title: "Terlambat", value: invoices.filter((i) => i.status === "OVERDUE").length, description: "Invoice yang sudah jatuh tempo", icon: AlertTriangle, className: "bg-gradient-to-r from-[#dc2626] to-[#ef4444]" }, 
@@ -124,6 +131,8 @@ const filteredInvoices = useMemo(() => {
   };
 
   const toDateInput = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "");
+
+  const invoiceRef = useRef(null);
 
   const openAdd = () => {
     setEditingId(null);
@@ -223,6 +232,74 @@ const filteredInvoices = useMemo(() => {
       setSaving(false);
     }
   };
+
+  const handleSend = async () => {
+    if (!sendTarget) return;
+    setSaving(true);
+    try {
+      await sendInvoice(sendTarget.id, accessToken);
+      setSuccess(`Invoice ${sendTarget.invoice_number} berhasil dikirim ke WhatsApp client.`);
+      setSendTarget(null);
+      const refreshed = await getInvoices(accessToken);
+      setInvoices(refreshed);
+    } catch (err) {
+      setError(err.message || "Gagal mengirim invoice");
+      setSendTarget(null);
+      const refreshed = await getInvoices(accessToken);
+      setInvoices(refreshed);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!cancelTarget) return;
+    setSaving(true);
+    try {
+      await updateInvoice(cancelTarget.id, {
+        invoice_number: cancelTarget.invoice_number,
+        client_id: cancelTarget.client_id,
+        invoice_date: cancelTarget.invoice_date,
+        due_date: cancelTarget.due_date,
+        status: "CANCELLED",
+        notes: cancelTarget.notes || null,
+        created_by: cancelTarget.created_by || null,
+        items: (cancelTarget.items || []).map((it) => ({ product_id: it.product_id, quantity: it.quantity })),
+      }, accessToken);
+      setSuccess(`Invoice ${cancelTarget.invoice_number} berhasil dibatalkan.`);
+      setCancelTarget(null);
+      const refreshed = await getInvoices(accessToken);
+      setInvoices(refreshed);
+    } catch (err) {
+      setError(err.message || "Gagal membatalkan invoice");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDownloadPDF = useCallback(async () => {
+    if (!invoiceRef.current) return;
+    setDownloading(true);
+    try {
+      const html2canvas = (await import("html2canvas-pro")).default;
+      const jsPDF = (await import("jspdf")).default;
+      const canvas = await html2canvas(invoiceRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+      });
+      const imgData = canvas.toDataURL("image/png");
+      const imgWidth = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const pdf = new jsPDF("p", "mm", "a4");
+      pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+      pdf.save(`${detailTarget?.invoice_number || "invoice"}.pdf`);
+    } catch (err) {
+      setError("Gagal mengunduh PDF: " + err.message);
+    } finally {
+      setDownloading(false);
+    }
+  }, [detailTarget]);
 
   return (
     <div className="min-h-screen bg-[#fcf8ff] pt-16 app-content">
@@ -359,6 +436,8 @@ const filteredInvoices = useMemo(() => {
                           <div className="flex justify-end gap-1.5">
                             <button type="button" onClick={async () => { try { const res = await getInvoiceById(inv.id, accessToken); setDetailTarget(res.invoice || res); } catch (err) { setError(err.message || "Gagal mengambil detail invoice"); } }} title="Detail" className="flex h-8 w-8 items-center justify-center rounded-md bg-[#3525cd]/10 text-[#3525cd] transition hover:bg-[#3525cd]/20"><Eye className="h-4 w-4" /></button>
                             <button type="button" onClick={() => openEdit(inv)} title="Edit" className="flex h-8 w-8 items-center justify-center rounded-md bg-[#f59e0b]/10 text-[#d97706] transition hover:bg-[#f59e0b]/20"><Pencil className="h-4 w-4" /></button>
+                            <button type="button" onClick={() => setSendTarget(inv)} title="Kirim Invoice" disabled={inv.status !== "DRAFT"} className="flex h-8 w-8 items-center justify-center rounded-md bg-[#3b82f6]/10 text-[#2563eb] transition hover:bg-[#3b82f6]/20 disabled:cursor-not-allowed disabled:opacity-40"><Send className="h-4 w-4" /></button>
+                            <button type="button" onClick={() => setCancelTarget(inv)} title="Batalkan" disabled={inv.status === "CANCELLED" || inv.status === "PAID"} className="flex h-8 w-8 items-center justify-center rounded-md bg-[#dc2626]/10 text-[#dc2626] transition hover:bg-[#dc2626]/20 disabled:cursor-not-allowed disabled:opacity-40"><XCircle className="h-4 w-4" /></button>
                             <button type="button" onClick={() => setDeleteTarget(inv)} title="Hapus" className="flex h-8 w-8 items-center justify-center rounded-md bg-[#dc2626]/10 text-[#dc2626] transition hover:bg-[#dc2626]/20"><Trash2 className="h-4 w-4" /></button>
                           </div> 
                         </td> 
@@ -384,10 +463,13 @@ const filteredInvoices = useMemo(() => {
                   </div>
                   <div className="flex items-center gap-3">
                     <StatusBadge status={detailTarget.status} />
+                    <button type="button" onClick={handleDownloadPDF} disabled={downloading} className="flex items-center gap-1.5 rounded-lg bg-[#3525cd] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#2a1db5] disabled:opacity-50">
+                      {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} {downloading ? "Mengunduh..." : "Download PDF"}
+                    </button>
                     <button type="button" onClick={() => setDetailTarget(null)} className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#f3f1f7] text-[#464555] transition hover:bg-[#e5e2ea]"><X size={18} /></button>
                   </div>
                 </div>
-                <div className="bg-[#f0f0f5]">
+                <div ref={invoiceRef} className="bg-[#f0f0f5]">
                   <InvoiceTemplate invoice={toTemplateInvoice(detailTarget)} />
                 </div>
               </div>
@@ -445,10 +527,12 @@ const filteredInvoices = useMemo(() => {
 
                 <div>
                   <label className="mb-1.5 block text-sm font-semibold text-[#464555]">Status</label>
-                  <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="w-full rounded-lg border border-[#c7c4d8] bg-white px-3 py-2 text-sm text-[#191c1e] outline-none transition focus:border-[#3525cd] focus:ring-2 focus:ring-[#3525cd]/20">
+                  <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} disabled={editingId && LOCKED_STATUSES.includes(form.status)} className={`w-full rounded-lg border border-[#c7c4d8] bg-white px-3 py-2 text-sm text-[#191c1e] outline-none transition focus:border-[#3525cd] focus:ring-2 focus:ring-[#3525cd]/20 disabled:cursor-not-allowed disabled:bg-[#f4f2f8] disabled:text-[#9a97a9]`}>
                     {[
                       ...(editingId
-                        ? Object.keys(statusConfig)
+                        ? LOCKED_STATUSES.includes(form.status)
+                          ? [form.status]
+                          : EDITABLE_STATUSES
                         : ["DRAFT", "SENT"]),
                     ].map((s) => <option key={s} value={s}>{statusConfig[s].label}</option>)}
                   </select>
@@ -504,6 +588,52 @@ const filteredInvoices = useMemo(() => {
               <div className="flex justify-end gap-3 border-t border-[#e0e3e5] px-6 py-4">
                 <button type="button" onClick={() => setDeleteTarget(null)} className="rounded-xl border border-[#c7c4d8] px-5 py-2.5 text-sm font-semibold text-[#464555] transition hover:bg-[#eceef0]">Batal</button>
                 <button type="button" onClick={handleDelete} disabled={saving} className="rounded-xl bg-gradient-to-r from-[#dc2626] to-[#ef4444] px-5 py-2.5 text-sm font-semibold text-white shadow-md disabled:opacity-50">{saving ? "Menghapus..." : "Hapus"}</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Send Confirmation */}
+        {sendTarget && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={() => setSendTarget(null)}>
+            <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-[#3b82f6] to-[#60a5fa] px-6 py-5 text-white">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20"><Send size={18} /></div>
+                  <h2 className="text-lg font-bold">Kirim Invoice?</h2>
+                </div>
+              </div>
+              <div className="p-6">
+                <p className="text-sm leading-relaxed text-[#464555]">
+                  Yakin ingin mengirim invoice <span className="font-bold">"{sendTarget.invoice_number}"</span> ke client? Status akan berubah menjadi <span className="font-bold">Terkirim</span>.
+                </p>
+              </div>
+              <div className="flex justify-end gap-3 border-t border-[#e0e3e5] px-6 py-4">
+                <button type="button" onClick={() => setSendTarget(null)} className="rounded-xl border border-[#c7c4d8] px-5 py-2.5 text-sm font-semibold text-[#464555] transition hover:bg-[#eceef0]">Batal</button>
+                <button type="button" onClick={handleSend} disabled={saving} className="rounded-xl bg-gradient-to-r from-[#3b82f6] to-[#60a5fa] px-5 py-2.5 text-sm font-semibold text-white shadow-md disabled:opacity-50">{saving ? "Mengirim..." : "Kirim"}</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Cancel Confirmation */}
+        {cancelTarget && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={() => setCancelTarget(null)}>
+            <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-[#dc2626] to-[#ef4444] px-6 py-5 text-white">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20"><XCircle size={18} /></div>
+                  <h2 className="text-lg font-bold">Batalkan Invoice?</h2>
+                </div>
+              </div>
+              <div className="p-6">
+                <p className="text-sm leading-relaxed text-[#464555]">
+                  Yakin ingin membatalkan invoice <span className="font-bold">"{cancelTarget.invoice_number}"</span>? Status akan berubah menjadi <span className="font-bold">Dibatalkan</span>.
+                </p>
+              </div>
+              <div className="flex justify-end gap-3 border-t border-[#e0e3e5] px-6 py-4">
+                <button type="button" onClick={() => setCancelTarget(null)} className="rounded-xl border border-[#c7c4d8] px-5 py-2.5 text-sm font-semibold text-[#464555] transition hover:bg-[#eceef0]">Tidak</button>
+                <button type="button" onClick={handleCancel} disabled={saving} className="rounded-xl bg-gradient-to-r from-[#dc2626] to-[#ef4444] px-5 py-2.5 text-sm font-semibold text-white shadow-md disabled:opacity-50">{saving ? "Membatalkan..." : "Batalkan"}</button>
               </div>
             </div>
           </div>

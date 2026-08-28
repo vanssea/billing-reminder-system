@@ -36,6 +36,7 @@ import SuperAdminDashboard from "./pages/superadmin/Dashboard";
 import AdminManagement from "./pages/superadmin/AdminManagement";
 import ClientManagement from "./pages/superadmin/ClientManagement";
 import ProductManagement from "./pages/superadmin/ProductManagement";
+import PurchaseManagement from "./pages/superadmin/PurchaseManagement";
 import InvoiceManagement from "./pages/superadmin/InvoiceManagement";
 import ReminderManagement from "./pages/superadmin/ReminderManagement";
 import PaymentManagement from "./pages/superadmin/PaymentManagement";
@@ -213,6 +214,15 @@ function App() {
           element={
             <ProtectedRoute roles={["SUPERADMIN"]}>
               <InvoiceManagement />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/superadmin/purchases"
+          element={
+            <ProtectedRoute roles={["SUPERADMIN"]}>
+              <PurchaseManagement />
             </ProtectedRoute>
           }
         />

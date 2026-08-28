@@ -52,7 +52,7 @@ func (s *InvoiceService) GetInvoicesByClientID(clientID string) ([]models.Invoic
 			created_at,
 			updated_at
 		FROM invoices
-		WHERE client_id = $1
+		WHERE client_id = $1 AND status <> 'DRAFT'
 		ORDER BY invoice_date DESC
 	`, clientID)
 	if err != nil {
@@ -1174,6 +1174,43 @@ func (s *InvoiceService) updateInvoiceInternal(
 		return nil, err
 	}
 
+	// Guard transisi status. Superadmin tidak boleh sembarangan mengubah
+	// status invoice sehingga melewati workflow pembayaran:
+	//   - PAID    hanya dihasilkan oleh persetujuan pembayaran.
+	//   - OVERDUE hanya dihasilkan oleh scheduler overdue.
+	//   - invoice yang sudah lunas/dibatalkan tidak bisa pindah status lain,
+	//     dan invoice OVERDUE hanya bisa dibatalkan (CANCELLED).
+	statusChanged := req.Status != "" && req.Status != previousStatus
+	if statusChanged {
+		switch req.Status {
+		case "PAID":
+			return nil, fmt.Errorf(
+				"status invoice lunas (PAID) hanya dapat dihasilkan melalui persetujuan pembayaran dan tidak dapat diubah manual",
+			)
+		case "OVERDUE":
+			return nil, fmt.Errorf(
+				"status OVERDUE ditetapkan otomatis oleh sistem dan tidak dapat diubah manual",
+			)
+		}
+
+		switch previousStatus {
+		case "PAID":
+			return nil, fmt.Errorf(
+				"status invoice yang sudah lunas (PAID) tidak dapat diubah manual",
+			)
+		case "OVERDUE":
+			if req.Status != "CANCELLED" {
+				return nil, fmt.Errorf(
+					"invoice berstatus OVERDUE hanya dapat dibatalkan (CANCELLED); status lain tidak dapat diubah manual",
+				)
+			}
+		case "CANCELLED":
+			return nil, fmt.Errorf(
+				"invoice yang sudah dibatalkan (CANCELLED) tidak dapat diubah statusnya",
+			)
+		}
+	}
+
 	var subtotal float64
 
 	type enrichedItem struct {
@@ -1457,8 +1494,8 @@ func (s *InvoiceService) SendInvoice(id string) (*models.Invoice, error) {
 		return nil, err
 	}
 
-	if current.Status != "DRAFT" && current.Status != "UNPAID" {
-		return nil, fmt.Errorf("hanya invoice berstatus DRAFT atau UNPAID yang bisa dikirim")
+	if current.Status != "DRAFT" {
+		return nil, fmt.Errorf("hanya invoice berstatus DRAFT yang bisa dikirim")
 	}
 
 	items := make([]models.InvoiceItemRequest, 0, len(current.Items))

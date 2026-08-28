@@ -241,7 +241,7 @@ export default function PaymentManagement() {
     if (!approvePayment || processing) return;
     setProcessing(true);
     try {
-      await approvePaymentRequest(approvePayment.id, user?.id || null);
+      await approvePaymentRequest(approvePayment.id, accessToken);
       await loadPayments();
       closeAllModals();
       setSuccessMsg(`Payment ${approvePayment.invoiceNumber} has been approved`);
@@ -262,7 +262,7 @@ export default function PaymentManagement() {
     }
     setProcessing(true);
     try {
-      await rejectPaymentRequest(rejectPayment.id, { verifiedBy: user?.id || null, notes: reason });
+      await rejectPaymentRequest(rejectPayment.id, accessToken, { notes: reason });
       await loadPayments();
       closeAllModals();
       setSuccessMsg(`Payment ${rejectPayment.invoiceNumber} has been rejected`);

@@ -18,6 +18,13 @@ const discountPct = (product) =>
     ? Math.round((1 - Number(product.price_yearly) / Number(product.price)) * 100)
     : 20;
 
+const BILLING_MONTHS = { monthly: 1, yearly: 12 };
+
+const addMonths = (ts, months) => {
+  const d = new Date(ts);
+  return new Date(d.getFullYear(), d.getMonth() + months, d.getDate()).getTime();
+};
+
 const getMissingProfileFields = (client) => {
   const required = {
     company_name: "Nama Perusahaan",
@@ -92,14 +99,27 @@ export default function ClientProducts() {
 
         setProducts(active);
 
-        const ids = new Set();
+        const now = Date.now();
+        const activeUntil = new Map();
         (invData || [])
           .filter((inv) => inv.status === "PAID")
           .forEach((inv) => {
+            const startRaw = inv.sent_at || inv.invoice_date;
+            const start = startRaw ? new Date(startRaw).getTime() : null;
             (inv.items || []).forEach((item) => {
-              if (item?.product_id != null) ids.add(String(item.product_id));
+              if (item?.product_id == null) return;
+              const key = String(item.product_id);
+              const months = BILLING_MONTHS[String(item.billing_cycle || "").toLowerCase()] ?? 1;
+              const until = start == null ? Infinity : addMonths(start, months);
+              const prev = activeUntil.get(key);
+              if (prev === undefined || until > prev) activeUntil.set(key, until);
             });
           });
+
+        const ids = new Set();
+        for (const [pid, until] of activeUntil) {
+          if (until > now) ids.add(pid);
+        }
         setActiveProductIds(ids);
       } catch {
         setError("Gagal memuat daftar paket.");
