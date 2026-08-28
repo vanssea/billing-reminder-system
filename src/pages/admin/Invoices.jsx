@@ -460,7 +460,7 @@ export default function AdminInvoices() {
                             <button type="button" onClick={() => openEdit(inv)} title="Edit" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#f59e0b]/10 text-[#d97706] transition hover:bg-[#f59e0b]/20">
                               <Pencil className="h-4 w-4" />
                             </button>
-                            <button type="button" onClick={() => setSendTarget(inv)} title="Kirim Invoice" disabled={inv.status !== "DRAFT" && inv.status !== "UNPAID"} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#3b82f6]/10 text-[#2563eb] transition hover:bg-[#3b82f6]/20 disabled:cursor-not-allowed disabled:opacity-40">
+                            <button type="button" onClick={() => setSendTarget(inv)} title="Kirim Invoice" disabled={inv.status !== "DRAFT"} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#3b82f6]/10 text-[#2563eb] transition hover:bg-[#3b82f6]/20 disabled:cursor-not-allowed disabled:opacity-40">
                               <Send className="h-4 w-4" />
                             </button>
                             {isSuperadmin ? (

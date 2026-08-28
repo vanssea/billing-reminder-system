@@ -11,6 +11,7 @@ import (
 
 func ClientRoutes(router *chi.Mux, clientHandler *handlers.ClientHandler, authService *services.AuthService) {
 	staff := middleware.RequireRole(models.RoleAdmin, models.RoleSuperadmin)
+	superadmin := middleware.RequireRole(models.RoleSuperadmin)
 
 	// Rute Lama (Superadmin) — kini dilindungi untuk staff internal.
 	router.Group(func(r chi.Router) {
@@ -19,7 +20,6 @@ func ClientRoutes(router *chi.Mux, clientHandler *handlers.ClientHandler, authSe
 		r.Post("/api/clients", clientHandler.CreateClient)
 		r.Get("/api/clients/{id}", clientHandler.GetClientByID)
 		r.Put("/api/clients/{id}", clientHandler.UpdateClient)
-		r.Delete("/api/clients/{id}", clientHandler.DeleteClient)
 	})
 
 	// Profil milik sendiri: user login mana pun, namun CLIENT hanya boleh
@@ -37,5 +37,13 @@ func ClientRoutes(router *chi.Mux, clientHandler *handlers.ClientHandler, authSe
 		r.Get("/{id}", clientHandler.GetClientByID)
 		r.Put("/{id}", clientHandler.UpdateClient)
 		r.Patch("/{id}/status", clientHandler.UpdateClientStatus)
+	})
+
+	// Hapus client: khusus SUPERADMIN (bukan ADMIN). Didaftarkan di rute lama
+	// maupun rute baru agar admin tidak bisa bypass lewat endpoint lain.
+	router.Group(func(r chi.Router) {
+		r.Use(middleware.RequireAuth(authService), superadmin)
+		r.Delete("/api/clients/{id}", clientHandler.DeleteClient)
+		r.Delete("/api/admin/clients/{id}", clientHandler.DeleteClient)
 	})
 }

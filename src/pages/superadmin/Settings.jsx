@@ -1,52 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
+import { useAuth } from "../../context/AuthContext";
 import {
-  BellRing,
+  AlertCircle,
   CheckCircle2,
   Clock3,
   Globe,
-  Info,
-  MessageSquare,
   RotateCcw,
   Save,
-  Wallet,
 } from "lucide-react";
+import { getSettings, updateSettings } from "../../services/settingsApi";
 
-const STORAGE_KEY = "superadmin_settings_v1";
-
-const DEFAULT_SETTINGS = {
-  reminder: {
-    h3: true,
-    h1: true,
-    h0: true,
-    sendTime: "09:00",
-    channel: "WHATSAPP",
-  },
-  notifications: {
-    paymentReceived: true,
-    overdueDaily: true,
-    weeklySummary: false,
-    failedReminderAlert: true,
-  },
-};
-
-const loadSettings = () => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_SETTINGS;
-    const parsed = JSON.parse(raw);
-    return {
-      reminder: { ...DEFAULT_SETTINGS.reminder, ...(parsed.reminder || {}) },
-      notifications: {
-        ...DEFAULT_SETTINGS.notifications,
-        ...(parsed.notifications || {}),
-      },
-    };
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
-};
+const DEFAULT_SEND_TIME = "08:00";
 
 function Toggle({ checked, onChange, label }) {
   return (
@@ -93,46 +59,72 @@ const inputClass =
   "w-full rounded-lg border border-[#c7c4d8] bg-white px-3 py-2 text-sm text-[#191c1e] outline-none transition focus:border-[#3525cd] focus:ring-2 focus:ring-[#3525cd]/20";
 
 export default function Settings() {
-  const [settings, setSettings] = useState(loadSettings);
+  const { accessToken } = useAuth();
+  const [enabledTypes, setEnabledTypes] = useState([]);
+  const [sendTime, setSendTime] = useState(DEFAULT_SEND_TIME);
+  const [types, setTypes] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    const load = async () => {
+      if (!accessToken) return;
+      try {
+        const data = await getSettings(accessToken);
+        setEnabledTypes(data.enabled_types || []);
+        setSendTime(data.send_time || DEFAULT_SEND_TIME);
+        setTypes(data.types || []);
+      } catch (err) {
+        setErrorMessage(err.message || "Gagal memuat pengaturan.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [accessToken]);
 
   const showSuccess = (msg) => {
     setSuccessMessage(msg);
+    setErrorMessage("");
     setTimeout(() => setSuccessMessage(""), 3000);
   };
 
-  const updateReminder = (key, value) =>
-    setSettings((s) => ({ ...s, reminder: { ...s.reminder, [key]: value } }));
-
-  const updateNotification = (key, value) =>
-    setSettings((s) => ({
-      ...s,
-      notifications: { ...s.notifications, [key]: value },
-    }));
-
-  const handleSave = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-    showSuccess("Pengaturan berhasil disimpan di browser ini.");
+  const toggleType = (type) => {
+    setEnabledTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
   };
 
-  const handleReset = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    setSettings(DEFAULT_SETTINGS);
-    showSuccess("Pengaturan dikembalikan ke default.");
+  const handleSave = async () => {
+    try {
+      const saved = await updateSettings(
+        { enabled_types: enabledTypes, send_time: sendTime },
+        accessToken
+      );
+      setEnabledTypes(saved.enabled_types || []);
+      setSendTime(saved.send_time || DEFAULT_SEND_TIME);
+      setTypes(saved.types || []);
+      showSuccess("Pengaturan berhasil disimpan.");
+    } catch (err) {
+      setErrorMessage(err.message || "Gagal menyimpan pengaturan.");
+    }
   };
 
-  const reminderOptions = [
-    { key: "h3", title: "H-3 Sebelum Jatuh Tempo", desc: "Kirim pengingat 3 hari sebelum due date." },
-    { key: "h1", title: "H-1 Sebelum Jatuh Tempo", desc: "Kirim pengingat 1 hari sebelum due date." },
-    { key: "h0", title: "Hari Jatuh Tempo (H-0)", desc: "Kirim pengingat pada hari due date." },
-  ];
-
-  const notificationOptions = [
-    { key: "paymentReceived", title: "Pembayaran Masuk", desc: "Notifikasi saat ada pembayaran baru diterima.", icon: Wallet },
-    { key: "overdueDaily", title: "Rekap Overdue Harian", desc: "Ringkasan invoice overdue setiap pagi.", icon: Clock3 },
-    { key: "weeklySummary", title: "Ringkasan Mingguan", desc: "Laporan aktivitas billing tiap Senin pagi.", icon: BellRing },
-    { key: "failedReminderAlert", title: "Reminder Gagal", desc: "Peringatan jika ada reminder yang gagal terkirim.", icon: MessageSquare },
-  ];
+  const handleReset = async () => {
+    try {
+      const saved = await updateSettings(
+        { enabled_types: types.map((t) => t.type), send_time: DEFAULT_SEND_TIME },
+        accessToken
+      );
+      setEnabledTypes(saved.enabled_types || []);
+      setSendTime(saved.send_time || DEFAULT_SEND_TIME);
+      setTypes(saved.types || []);
+      showSuccess("Pengaturan dikembalikan ke default.");
+    } catch (err) {
+      setErrorMessage(err.message || "Gagal mereset pengaturan.");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#fcf8ff] pt-16 app-content">
@@ -144,14 +136,15 @@ export default function Settings() {
           <div>
             <h1 className="text-2xl font-bold text-[#191c1e]">Settings</h1>
             <p className="mt-1 text-sm text-[#8b8898]">
-              Kelola preferensi akun dan operasional billing.
+              Konfigurasi pengingat invoice (disimpan di server).
             </p>
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleReset}
-              className="inline-flex items-center gap-2 rounded-xl border border-[#e0e3e5] bg-white px-4 py-2.5 text-sm font-semibold text-[#464555] shadow-sm transition hover:bg-[#f6f4fa]"
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-xl border border-[#e0e3e5] bg-white px-4 py-2.5 text-sm font-semibold text-[#464555] shadow-sm transition hover:bg-[#f6f4fa] disabled:opacity-50"
             >
               <RotateCcw size={15} />
               Reset Default
@@ -159,7 +152,8 @@ export default function Settings() {
             <button
               type="button"
               onClick={handleSave}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#3525cd] to-[#5b44f3] px-5 py-2.5 text-sm font-bold text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#3525cd] to-[#5b44f3] px-5 py-2.5 text-sm font-bold text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-50"
             >
               <Save size={15} />
               Simpan Pengaturan
@@ -176,14 +170,14 @@ export default function Settings() {
           </div>
         )}
 
-        <div className="mb-6 flex items-start gap-3 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-500">
-            <Info size={16} />
+        {errorMessage && (
+          <div className="mb-6 flex items-center gap-3 rounded-xl border border-red-200 bg-gradient-to-r from-red-50 to-red-100 px-4 py-3.5 shadow-sm">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-500">
+              <AlertCircle size={16} />
+            </div>
+            <span className="text-sm font-medium text-red-700">{errorMessage}</span>
           </div>
-          <p className="text-sm leading-relaxed text-blue-800">
-            Mode frontend: pengaturan disimpan di <span className="font-semibold">localStorage browser ini</span> dan belum tersinkron dengan server. Data tetap ada setelah refresh selama menggunakan browser yang sama.
-          </p>
-        </div>
+        )}
 
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
           <div className="xl:col-span-2 space-y-5">
@@ -192,93 +186,59 @@ export default function Settings() {
               title="Default Reminder Invoice"
               description="Jadwal otomatis pengiriman pengingat sebelum jatuh tempo."
             >
-              <div className="space-y-3">
-                {reminderOptions.map((opt) => (
-                  <div
-                    key={opt.key}
-                    className={`flex items-center justify-between gap-4 rounded-xl border px-4 py-3.5 transition ${
-                      settings.reminder[opt.key]
-                        ? "border-[#3525cd]/25 bg-[#3525cd]/[0.04]"
-                        : "border-[#eef0f2] bg-white"
-                    }`}
-                  >
-                    <div>
-                      <p className="text-sm font-bold text-[#191c1e]">{opt.title}</p>
-                      <p className="mt-0.5 text-xs text-[#9a97a9]">{opt.desc}</p>
-                    </div>
-                    <Toggle
-                      checked={settings.reminder[opt.key]}
-                      onChange={(v) => updateReminder(opt.key, v)}
-                      label={opt.title}
-                    />
+              {loading ? (
+                <p className="text-sm text-[#9a97a9]">Memuat pengaturan...</p>
+              ) : (
+                <>
+                  <div className="space-y-3">
+                    {types.map((opt) => {
+                      const checked = enabledTypes.includes(opt.type);
+                      const title = `${opt.type} Sebelum Jatuh Tempo`;
+                      const desc = `Kirim pengingat ${opt.days} hari sebelum jatuh tempo.`;
+                      return (
+                        <div
+                          key={opt.type}
+                          className={`flex items-center justify-between gap-4 rounded-xl border px-4 py-3.5 transition ${
+                            checked
+                              ? "border-[#3525cd]/25 bg-[#3525cd]/[0.04]"
+                              : "border-[#eef0f2] bg-white"
+                          }`}
+                        >
+                          <div>
+                            <p className="text-sm font-bold text-[#191c1e]">{title}</p>
+                            <p className="mt-0.5 text-xs text-[#9a97a9]">{desc}</p>
+                          </div>
+                          <Toggle
+                            checked={checked}
+                            onChange={() => toggleType(opt.type)}
+                            label={title}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
 
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-[#8b8898]">
-                    Jam Pengiriman
-                  </label>
-                  <input
-                    type="time"
-                    value={settings.reminder.sendTime}
-                    onChange={(e) => updateReminder("sendTime", e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-[#8b8898]">
-                    Kanal Pengiriman
-                  </label>
-                  <select
-                    value={settings.reminder.channel}
-                    onChange={(e) => updateReminder("channel", e.target.value)}
-                    className={inputClass}
-                  >
-                    <option value="WHATSAPP">WhatsApp</option>
-                    <option value="EMAIL" disabled>Email (segera hadir)</option>
-                  </select>
-                </div>
-              </div>
+                  <div className="mt-4">
+                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-[#8b8898]">
+                      Jam Pengiriman
+                    </label>
+                    <input
+                      type="time"
+                      value={sendTime}
+                      onChange={(e) => setSendTime(e.target.value)}
+                      className={inputClass}
+                    />
+                    <p className="mt-1.5 text-xs text-[#9a97a9]">
+                      Berlaku global. Reminder PENDING yang belum terkirim akan mengikuti jam baru;
+                      reminder yang sudah terkirim tidak diubah.
+                    </p>
+                  </div>
+                </>
+              )}
             </SectionCard>
           </div>
 
           <div className="space-y-5">
-            <SectionCard
-              icon={BellRing}
-              title="Notifikasi"
-              description="Pilih aktivitas yang ingin kamu terima notifikasinya."
-              accent="#b02463"
-            >
-              <div className="space-y-3">
-                {notificationOptions.map((opt) => {
-                  const OptIcon = opt.icon;
-                  return (
-                    <div
-                      key={opt.key}
-                      className="flex items-start justify-between gap-3 rounded-xl border border-[#eef0f2] px-4 py-3.5"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#b02463]/10 text-[#b02463]">
-                          <OptIcon size={15} />
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-[#191c1e]">{opt.title}</p>
-                          <p className="mt-0.5 text-xs text-[#9a97a9]">{opt.desc}</p>
-                        </div>
-                      </div>
-                      <Toggle
-                        checked={settings.notifications[opt.key]}
-                        onChange={(v) => updateNotification(opt.key, v)}
-                        label={opt.title}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </SectionCard>
-
             <SectionCard
               icon={Globe}
               title="Tampilan Sistem"

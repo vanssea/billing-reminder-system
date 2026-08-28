@@ -164,6 +164,10 @@ func (h *InvoiceHandler) UpdateInvoice(w http.ResponseWriter, r *http.Request) {
 
 	invoice, err := h.Service.UpdateInvoice(id, req)
 	if err != nil {
+		if strings.Contains(err.Error(), "tidak dapat") {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		http.Error(w, "Gagal mengupdate invoice: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

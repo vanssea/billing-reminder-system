@@ -330,7 +330,7 @@ func (s *AdminService) GetDashboardSummary() (*models.DashboardSummary, error) {
 	// 1. Ambil Statistik Angka (Stats)
 	statsQuery := `
 		SELECT
-			COUNT(id) as total_invoices,
+			COUNT(id) FILTER (WHERE status <> 'DRAFT') as total_invoices,
 			COUNT(id) FILTER (WHERE status = 'SENT') as sent_invoices,
 			COUNT(id) FILTER (WHERE status = 'PAID') as paid_invoices,
 			COUNT(id) FILTER (WHERE status = 'UNPAID') as unpaid_invoices,
@@ -445,7 +445,7 @@ func (s *AdminService) GetSuperAdminDashboard() (*models.SuperAdminDashboard, er
 		SELECT
 			(SELECT COUNT(*) FROM clients c JOIN profiles p ON p.id = c.profile_id WHERE p.role = 'CLIENT'),
 			(SELECT COUNT(id) FROM profiles WHERE role = 'ADMIN'),
-			COUNT(id),
+			COUNT(id) FILTER (WHERE status <> 'DRAFT'),
 			COUNT(id) FILTER (WHERE status = 'PAID'),
 			COUNT(id) FILTER (WHERE status = 'UNPAID'),
 			COUNT(id) FILTER (WHERE status = 'OVERDUE'),

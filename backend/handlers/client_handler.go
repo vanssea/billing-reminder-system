@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -122,6 +123,10 @@ func (h *ClientHandler) DeleteClient(w http.ResponseWriter, r *http.Request) {
 
 	err := h.Service.DeleteClient(id)
 	if err != nil {
+		if errors.Is(err, services.ErrClientHasInvoices) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		http.Error(w, "Gagal menghapus client: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

@@ -39,8 +39,11 @@ func (s *ReminderService) StartReminderScheduler(ctx context.Context) {
 }
 
 // processDueReminders memproses seluruh reminder yang sudah waktunya dikirim.
+// Tipe reminder yang dinonaktifkan di pengaturan tidak diikutsertakan tanpa
+// menghapus record-nya (history tetap ada; cukup di-filter di query).
 func (s *ReminderService) processDueReminders(ctx context.Context) {
-	reminders, err := s.getDueReminders(ctx)
+	settings := getReminderSettings(ctx, s.DB)
+	reminders, err := s.getDueReminders(ctx, settings.EnabledTypes)
 	if err != nil {
 		log.Println("Gagal mengambil reminder yang jatuh tempo:", err)
 		return
@@ -62,7 +65,9 @@ type dueReminderRow struct {
 }
 
 // getDueReminders mengambil reminder PENDING yang sudah jatuh tempo.
-func (s *ReminderService) getDueReminders(ctx context.Context) ([]dueReminderRow, error) {
+// enabledTypes adalah daftar tipe reminder yang aktif di pengaturan; tipe yang
+// tidak ada di daftar tidak pernah dipilih (tanpa mengubah record).
+func (s *ReminderService) getDueReminders(ctx context.Context, enabledTypes []string) ([]dueReminderRow, error) {
 	rows, err := s.DB.Query(ctx, `
 		SELECT
 			r.id,
@@ -78,9 +83,10 @@ WHERE r.status = 'PENDING'
 		  AND c.phone IS NOT NULL
 		  AND i.status IN ('SENT', 'UNPAID')
 		  AND r.reminder_type != ''
+		  AND r.reminder_type = ANY($1)
 ORDER BY r.scheduled_at ASC
 		LIMIT 50
-	`)
+	`, enabledTypes)
 	if err != nil {
 		return nil, err
 	}

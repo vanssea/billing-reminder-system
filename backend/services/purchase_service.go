@@ -295,7 +295,7 @@ func (s *PurchaseService) UpdatePurchaseRequestStatus(id, status string, adminNo
 			ClientID:    purchaseReq.ClientID,
 			InvoiceDate: purchaseReq.CreatedAt.Format("2006-01-02"),
 			DueDate:     dueDate.Format("2006-01-02"),
-			Status:      "UNPAID",
+			Status:      "DRAFT",
 			Notes:       adminNotes,
 			Items: []models.InvoiceItemRequest{
 				{

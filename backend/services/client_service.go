@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 
@@ -9,6 +10,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// ErrClientHasInvoices menandakan client tidak dapat dihapus karena masih
+// memiliki invoice terhubung (FK invoices.client_id -> clients RESTRICT).
+var ErrClientHasInvoices = errors.New("client memiliki invoice terhubung")
 
 type ClientService struct {
 	DB *pgxpool.Pool
@@ -162,6 +167,23 @@ func (s *ClientService) UpdateClientStatus(ctx context.Context, adminID, id, sta
 }
 
 func (s *ClientService) DeleteClient(id string) error {
+	// Cegah penghapusan ketika client masih punya invoice (RESTRICT FK).
+	// Memblokir di level service agar tidak bergantung pada pesan error DB,
+	// dan memberi pesan yang jelas ke frontend.
+	var invoiceCount int
+	if err := s.DB.QueryRow(context.Background(),
+		`SELECT COUNT(*) FROM invoices WHERE client_id = $1`, id,
+	).Scan(&invoiceCount); err != nil {
+		return err
+	}
+	if invoiceCount > 0 {
+		return fmt.Errorf(
+			"%w: client tidak dapat dihapus karena memiliki %d invoice terhubung. Nonaktifkan status saja",
+			ErrClientHasInvoices,
+			invoiceCount,
+		)
+	}
+
 	query := `DELETE FROM clients WHERE id = $1`
 	_, err := s.DB.Exec(context.Background(), query, id)
 	return err
