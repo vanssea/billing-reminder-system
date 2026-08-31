@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
+import { useAuth } from "../../context/AuthContext";
 import {
   Search,
   Plus,
@@ -66,7 +67,6 @@ const emptyForm = {
   billing_type: "monthly",
   features: "",
   popular: false,
-  cta: "",
   status: "Active",
 };
 
@@ -94,6 +94,7 @@ function StatusBadge({ status }) {
 }
 
 export default function ProductManagement() {
+  const { accessToken } = useAuth();
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -199,7 +200,6 @@ export default function ProductManagement() {
       billing_type: product.billing_type || "monthly",
       features: (product.features || []).join(", "),
       popular: product.popular || false,
-      cta: product.cta || "",
       status: product.status || "Active",
     });
     setFormErrors({});
@@ -230,15 +230,14 @@ export default function ProductManagement() {
           ? form.features.split(",").map((f) => f.trim()).filter(Boolean)
           : [],
         popular: form.popular,
-        cta: form.cta || null,
         status: statusToDb[form.status] || form.status,
       };
 
       if (editingId) {
-        await updateProduct(editingId, payload);
+        await updateProduct(editingId, payload, accessToken);
         setSuccess("Data produk berhasil diperbarui.");
       } else {
-        await createProduct(payload);
+        await createProduct(payload, accessToken);
         setSuccess("Produk baru berhasil ditambahkan.");
       }
 
@@ -258,7 +257,7 @@ export default function ProductManagement() {
       setLoading(true);
       setError("");
       setSuccess("");
-      await deleteProduct(deleteTarget.id);
+      await deleteProduct(deleteTarget.id, accessToken);
       setProducts((prev) => prev.filter((p) => p.id !== deleteTarget.id));
       setSuccess("Produk berhasil dihapus.");
       setDeleteTarget(null);
@@ -610,17 +609,6 @@ export default function ProductManagement() {
                     value={form.features}
                     onChange={(e) => setForm({ ...form, features: e.target.value })}
                     placeholder="cth: SSD 10GB, Bandwidth Unlimited, SSL Gratis"
-                    className={inputClass}
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-sm font-semibold text-[#464555]">CTA (Teks Tombol)</label>
-                  <input
-                    type="text"
-                    value={form.cta}
-                    onChange={(e) => setForm({ ...form, cta: e.target.value })}
-                    placeholder="cth: Mulai Sekarang"
                     className={inputClass}
                   />
                 </div>
