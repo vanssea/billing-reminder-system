@@ -15,10 +15,19 @@ const reminderSchedulerInterval = 60 * time.Second
 // StartReminderScheduler menjalankan loop background yang memproses
 // reminder PENDING yang sudah jatuh tempo setiap 1 menit.
 func (s *ReminderService) StartReminderScheduler(ctx context.Context) {
-	if s.WhatsApp == nil {
-		log.Println("Reminder scheduler aktif tetapi WhatsApp belum tersedia.")
+	if s.WhatsApp == nil && s.Email == nil {
+		log.Println("Reminder scheduler aktif tetapi WhatsApp dan Email belum tersedia.")
 		return
 	}
+
+	channels := []string{}
+	if s.WhatsApp != nil {
+		channels = append(channels, "WhatsApp")
+	}
+	if s.Email != nil {
+		channels = append(channels, "Email")
+	}
+	log.Printf("Reminder scheduler aktif via: %s", strings.Join(channels, " + "))
 
 	ticker := time.NewTicker(reminderSchedulerInterval)
 	defer ticker.Stop()
@@ -58,9 +67,10 @@ func (s *ReminderService) processDueReminders(ctx context.Context) {
 
 // dueReminderRow adalah baris reminder yang siap diproses.
 type dueReminderRow struct {
-	ID         string
-	InvoiceID  string
-	Phone      string
+	ID           string
+	InvoiceID    string
+	Phone        string
+	Email        string
 	ReminderType string
 }
 
@@ -72,7 +82,8 @@ func (s *ReminderService) getDueReminders(ctx context.Context, enabledTypes []st
 		SELECT
 			r.id,
 			r.invoice_id,
-			c.phone,
+			COALESCE(c.phone, ''),
+			COALESCE(c.email, ''),
 			r.reminder_type
 		FROM reminders r
 		INNER JOIN invoices i ON i.id = r.invoice_id
@@ -80,10 +91,10 @@ func (s *ReminderService) getDueReminders(ctx context.Context, enabledTypes []st
 WHERE r.status = 'PENDING'
 		  AND r.scheduled_at <= NOW()
 		  AND r.sent_at IS NULL
-		  AND c.phone IS NOT NULL
 		  AND i.status IN ('SENT', 'UNPAID')
 		  AND r.reminder_type != ''
 		  AND r.reminder_type = ANY($1)
+		  AND (c.phone IS NOT NULL AND c.phone != '' AND c.email IS NOT NULL AND c.email != '')
 ORDER BY r.scheduled_at ASC
 		LIMIT 50
 	`, enabledTypes)
@@ -95,7 +106,7 @@ ORDER BY r.scheduled_at ASC
 	var results []dueReminderRow
 	for rows.Next() {
 		var r dueReminderRow
-		if err := rows.Scan(&r.ID, &r.InvoiceID, &r.Phone, &r.ReminderType); err != nil {
+		if err := rows.Scan(&r.ID, &r.InvoiceID, &r.Phone, &r.Email, &r.ReminderType); err != nil {
 			return nil, err
 		}
 		results = append(results, r)
@@ -103,11 +114,23 @@ ORDER BY r.scheduled_at ASC
 	return results, rows.Err()
 }
 
-// processReminder mengirim satu reminder (pesan teks)
-// lalu memperbarui statusnya.
+// processReminder mengirim satu reminder via WhatsApp DAN Email.
+// Kedua channel wajib sukses; jika salah satu gagal, reminder di-mark FAILED.
 func (s *ReminderService) processReminder(ctx context.Context, r dueReminderRow) error {
-	if s.WhatsApp == nil {
+	hasWhatsApp := s.WhatsApp != nil && s.WhatsApp.IsConnected()
+	hasEmail := s.Email != nil
+
+	if !hasWhatsApp {
 		return fmt.Errorf("WhatsApp belum tersedia")
+	}
+	if !hasEmail {
+		return fmt.Errorf("Email belum tersedia")
+	}
+	if strings.TrimSpace(r.Phone) == "" {
+		return fmt.Errorf("client tidak memiliki nomor telepon")
+	}
+	if strings.TrimSpace(r.Email) == "" {
+		return fmt.Errorf("client tidak memiliki alamat email")
 	}
 
 	fail := func(err error) error {
@@ -143,15 +166,17 @@ func (s *ReminderService) processReminder(ctx context.Context, r dueReminderRow)
 
 	message := buildReminderMessage(inv)
 
+	var errs []string
+
+	// 1. Kirim via WhatsApp
 	if r.ReminderType == "H-1" {
-		// Kirim PDF untuk reminder H-1 saja
 		pdfBytes, err := s.PDF.RenderInvoicePDF(inv)
 		if err == nil {
 			fileName := "Invoice-" + strings.ReplaceAll(inv.InvoiceNumber, "/", "-") + ".pdf"
 			if err := s.WhatsApp.SendDocument(r.Phone, fileName, pdfBytes); err != nil {
-				log.Printf("Reminder H-1: kirim PDF gagal: %v", err)
+				log.Printf("Reminder H-1: kirim PDF WA gagal: %v", err)
 			} else {
-				log.Printf("Reminder H-1: PDF terkirim ke %s", r.Phone)
+				log.Printf("Reminder H-1: PDF WA terkirim ke %s", r.Phone)
 			}
 		} else {
 			log.Printf("Reminder H-1: gagal generate PDF: %v", err)
@@ -159,10 +184,34 @@ func (s *ReminderService) processReminder(ctx context.Context, r dueReminderRow)
 	}
 
 	if err := s.WhatsApp.Send(r.Phone, message); err != nil {
-		return fail(fmt.Errorf("kirim teks gagal: %v", err))
+		log.Printf("Reminder WhatsApp gagal untuk %s: %v", inv.InvoiceNumber, err)
+		errs = append(errs, fmt.Sprintf("WhatsApp: %v", err))
+	} else {
+		log.Printf("Reminder %s (%s) WhatsApp terkirim ke %s", inv.InvoiceNumber, r.ID, r.Phone)
 	}
 
-	// 2. Sukses - tandai terkirim.
+	// 2. Kirim via Email
+	if err := s.Email.SendReminderEmail(
+		r.Email,
+		inv.ClientCompany,
+		inv.InvoiceNumber,
+		formatTanggalIndo(inv.DueDate),
+		formatRupiah(inv.Total),
+		inv.Status,
+		r.ReminderType,
+	); err != nil {
+		log.Printf("Reminder email gagal untuk %s: %v", inv.InvoiceNumber, err)
+		errs = append(errs, fmt.Sprintf("Email: %v", err))
+	} else {
+		log.Printf("Reminder %s (%s) email terkirim ke %s", inv.InvoiceNumber, r.ID, r.Email)
+	}
+
+	// 3. Jika salah satu channel gagal, seluruh reminder dianggap gagal
+	if len(errs) > 0 {
+		return fail(fmt.Errorf("pengiriman tidak lengkap: %s", strings.Join(errs, "; ")))
+	}
+
+	// 4. Kedua channel sukses - tandai terkirim.
 	if _, err := s.DB.Exec(ctx, `
 		UPDATE reminders
 		SET status = 'SENT', sent_at = NOW(), error_message = NULL
@@ -171,7 +220,7 @@ func (s *ReminderService) processReminder(ctx context.Context, r dueReminderRow)
 		return fmt.Errorf("pesan terkirim tapi update status gagal: %v", err)
 	}
 
-	log.Printf("Reminder %s (%s) terkirim ke %s", inv.InvoiceNumber, r.ID, r.Phone)
+	log.Printf("Reminder %s (%s) terkirim ke WA:%s dan Email:%s", inv.InvoiceNumber, r.ID, r.Phone, r.Email)
 	return nil
 }
 

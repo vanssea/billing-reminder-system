@@ -40,6 +40,7 @@ var reminderTypeOffsets = []struct {
 type ReminderService struct {
 	DB       *pgxpool.Pool
 	WhatsApp *WhatsAppService
+	Email    *EmailService
 	PDF      *PDFService
 }
 

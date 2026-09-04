@@ -33,6 +33,12 @@ func main() {
 	if waErr != nil {
 		log.Printf("WhatsApp service tidak aktif: %v (notifikasi WA dilewati)", waErr)
 	}
+	emailService := services.NewEmailService()
+	if emailService == nil {
+		log.Println("Email service tidak aktif: SMTP_HOST belum dikonfigurasi (notifikasi email dilewati)")
+	} else {
+		log.Println("Email service aktif via SMTP")
+	}
 	clientService := services.NewClientService(db)
 	adminService := services.NewAdminService(db)
 	productService := services.NewProductService(db)
@@ -41,13 +47,16 @@ func main() {
 	authService := services.NewAuthService(db, clientService)
 	invoiceService := services.NewInvoiceService(db, clientService)
 	invoiceService.WhatsApp = waService
+	invoiceService.Email = emailService
 	invoiceService.PDF = pdfService
 	paymentService := services.NewPaymentService(db, clientService)
 	paymentService.WhatsApp = waService
+	paymentService.Email = emailService
 	purchaseService := services.NewPurchaseService(db, clientService, productService)
 	purchaseService.InvoiceService = invoiceService
 	reminderService := services.NewReminderService(db)
 	reminderService.WhatsApp = waService
+	reminderService.Email = emailService
 	reminderService.PDF = pdfService
 	appNotificationService := services.NewAppNotificationService(db)
 	settingsService := services.NewSettingsService(db)
@@ -64,6 +73,7 @@ func main() {
 	purchaseHandler := handlers.NewPurchaseHandler(purchaseService, authService)
 	reminderHandler := handlers.NewReminderHandler(reminderService)
 	whatsappHandler := handlers.NewWhatsAppHandler(waService, pdfService)
+	emailHandler := handlers.NewEmailHandler(emailService)
 	appNotificationHandler := handlers.NewAppNotificationHandler(appNotificationService, authService)
 	settingsHandler := handlers.NewSettingsHandler(settingsService)
 
@@ -110,6 +120,7 @@ func main() {
 	routes.ReminderRoutes(router, reminderHandler, authService)
 	routes.PaymentRoutes(router, paymentHandler, authService)
 	routes.WhatsAppRoutes(router, whatsappHandler, authService)
+	routes.EmailRoutes(router, emailHandler, authService)
 	routes.AppNotificationRoutes(router, appNotificationHandler, authService)
 	routes.SettingsRoutes(router, settingsHandler, authService)
 
