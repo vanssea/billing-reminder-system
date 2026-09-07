@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"billing-reminder-system/config"
@@ -27,12 +28,23 @@ func main() {
 	db := config.ConnectDatabase()
 	defer db.Close()
 
-	// Membuat service
-	pdfService := services.NewPDFService()
-	waService, waErr := services.NewWhatsAppService()
-	if waErr != nil {
-		log.Printf("WhatsApp service tidak aktif: %v (notifikasi WA dilewati)", waErr)
+	// Membuat service.
+	// Mode cron (REMINDER_SCHEDULER_DISABLED=true): koneksi WhatsApp hanya
+	// dipakai reminderworker.exe. Backend tidak menyambung agar tidak ada dua
+	// proses yang memakai sesi WA yang sama (WhatsApp hanya izinkan 1 koneksi
+	// per device; 2 koneksi = stream replaced / saling lempar koneksi).
+	// Email tetap aktif di backend.
+	var waService *services.WhatsAppService
+	if os.Getenv("REMINDER_SCHEDULER_DISABLED") != "true" {
+		var waErr error
+		waService, waErr = services.NewWhatsAppService()
+		if waErr != nil {
+			log.Printf("WhatsApp service tidak aktif: %v (notifikasi WA dilewati)", waErr)
+		}
+	} else {
+		log.Println("Mode cron aktif: WhatsApp dikelola reminderworker.exe; notifikasi WA dari backend dilewati.")
 	}
+	pdfService := services.NewPDFService()
 	emailService := services.NewEmailService()
 	if emailService == nil {
 		log.Println("Email service tidak aktif: SMTP_HOST belum dikonfigurasi (notifikasi email dilewati)")
@@ -124,8 +136,13 @@ func main() {
 	routes.AppNotificationRoutes(router, appNotificationHandler, authService)
 	routes.SettingsRoutes(router, settingsHandler, authService)
 
-	// Menjalankan scheduler reminder di background (H-30 s/d H-1 + overdue)
-	go reminderService.StartReminderScheduler(context.Background())
+	// Menjalankan scheduler reminder di background (H-30 s/d H-1 + overdue).
+	// Set REMINDER_SCHEDULER_DISABLED=true saat memakai cron worker
+	// (backend/cmd/reminderworker) sebagai pengganti scheduler in-process,
+	// agar tidak ada pengiriman ganda.
+	if os.Getenv("REMINDER_SCHEDULER_DISABLED") != "true" {
+		go reminderService.StartReminderScheduler(context.Background())
+	}
 
 	// Menjalankan watcher notifikasi invoice overdue untuk lonceng admin
 	go appNotificationService.StartOverdueWatcher(context.Background())
