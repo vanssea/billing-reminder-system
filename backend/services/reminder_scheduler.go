@@ -127,10 +127,6 @@ type dueReminderRow struct {
 // tidak ada di daftar tidak pernah dipilih (tanpa mengubah record).
 // Jika emailEnabled false, client tanpa email tetap dipilih (hanya WA).
 func (s *ReminderService) getDueReminders(ctx context.Context, enabledTypes []string, emailEnabled bool) ([]dueReminderRow, error) {
-	requiredEmail := ""
-	if emailEnabled {
-		requiredEmail = "WAJIB"
-	}
 	rows, err := s.DB.Query(ctx, `
 		SELECT
 			r.id,
@@ -148,10 +144,10 @@ WHERE r.status = 'PENDING'
 		  AND r.reminder_type != ''
 		  AND r.reminder_type = ANY($1)
 		  AND c.phone IS NOT NULL AND c.phone != ''
-		  AND c.email != $2
+		  AND ($2::boolean IS FALSE OR (c.email IS NOT NULL AND c.email != ''))
 ORDER BY r.scheduled_at ASC
 		LIMIT 50
-	`, enabledTypes, requiredEmail)
+	`, enabledTypes, emailEnabled)
 	if err != nil {
 		return nil, err
 	}
