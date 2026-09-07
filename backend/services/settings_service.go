@@ -40,6 +40,7 @@ type queryRower interface {
 type ReminderSettings struct {
 	EnabledTypes []string `json:"enabled_types"`
 	SendTime     string   `json:"send_time"`
+	EmailEnabled *bool    `json:"email_enabled,omitempty"`
 }
 
 type ReminderTypeInfo struct {
@@ -52,6 +53,7 @@ type ReminderTypeInfo struct {
 type ReminderSettingsView struct {
 	EnabledTypes []string           `json:"enabled_types"`
 	SendTime     string             `json:"send_time"`
+	EmailEnabled bool               `json:"email_enabled"`
 	Types        []ReminderTypeInfo `json:"types"`
 }
 
@@ -87,9 +89,11 @@ func defaultReminderSettings() ReminderSettings {
 	for _, rt := range reminderTypeOffsets {
 		enabled = append(enabled, rt.Type)
 	}
+	emailEnabled := true
 	return ReminderSettings{
 		EnabledTypes: enabled,
 		SendTime:     defaultSendTime,
+		EmailEnabled: &emailEnabled,
 	}
 }
 
@@ -143,6 +147,7 @@ func normalizeReminderSettings(s ReminderSettings) ReminderSettings {
 	return ReminderSettings{
 		EnabledTypes: normalized,
 		SendTime:     sendTime,
+		EmailEnabled: s.EmailEnabled,
 	}
 }
 
@@ -156,9 +161,14 @@ func reminderTypesView() []ReminderTypeInfo {
 
 func (s *SettingsService) GetSettings(ctx context.Context) (ReminderSettingsView, error) {
 	settings := getReminderSettings(ctx, s.DB)
+	emailEnabled := true
+	if settings.EmailEnabled != nil {
+		emailEnabled = *settings.EmailEnabled
+	}
 	return ReminderSettingsView{
 		EnabledTypes: settings.EnabledTypes,
 		SendTime:     settings.SendTime,
+		EmailEnabled: emailEnabled,
 		Types:        reminderTypesView(),
 	}, nil
 }
@@ -166,6 +176,7 @@ func (s *SettingsService) GetSettings(ctx context.Context) (ReminderSettingsView
 type UpdateReminderSettingsRequest struct {
 	EnabledTypes []string `json:"enabled_types"`
 	SendTime     string   `json:"send_time"`
+	EmailEnabled *bool    `json:"email_enabled,omitempty"`
 }
 
 // UpdateReminderSettings memvalidasi, menyimpan, lalu (jika send_time berubah)
@@ -182,6 +193,7 @@ func (s *SettingsService) UpdateReminderSettings(
 	newSettings := normalizeReminderSettings(ReminderSettings{
 		EnabledTypes: req.EnabledTypes,
 		SendTime:     req.SendTime,
+		EmailEnabled: req.EmailEnabled,
 	})
 
 	raw, err := json.Marshal(newSettings)
@@ -211,9 +223,15 @@ func (s *SettingsService) UpdateReminderSettings(
 		log.Printf("send_time berubah ke %s: %d reminder PENDING digeser", newSettings.SendTime, affected)
 	}
 
+	emailEnabled := true
+	if newSettings.EmailEnabled != nil {
+		emailEnabled = *newSettings.EmailEnabled
+	}
+
 	return ReminderSettingsView{
 		EnabledTypes: newSettings.EnabledTypes,
 		SendTime:     newSettings.SendTime,
+		EmailEnabled: emailEnabled,
 		Types:        reminderTypesView(),
 	}, nil
 }

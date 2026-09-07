@@ -18,6 +18,7 @@ type PaymentService struct {
 	DB            *pgxpool.Pool
 	ClientService *ClientService
 	WhatsApp      *WhatsAppService
+	Email         *EmailService
 }
 
 func NewPaymentService(db *pgxpool.Pool, clientService *ClientService) *PaymentService {
@@ -530,7 +531,7 @@ func (s *PaymentService) ApprovePayment(ctx context.Context, id string, req mode
 		return nil, err
 	}
 
-	go sendPaymentApprovedWhatsApp(s.DB, s.WhatsApp, id)
+	go sendPaymentApprovedWhatsApp(s.DB, s.WhatsApp, s.Email, id)
 	go NotifyPaymentApproved(s.DB, id)
 
 	return s.getPaymentDetailByID(ctx, id)
@@ -584,7 +585,7 @@ func (s *PaymentService) RejectPayment(ctx context.Context, id string, req model
 	if req.Notes != nil {
 		reason = *req.Notes
 	}
-	go sendPaymentRejectedWhatsApp(s.DB, s.WhatsApp, id, reason)
+	go sendPaymentRejectedWhatsApp(s.DB, s.WhatsApp, s.Email, id, reason)
 	go NotifyPaymentRejected(s.DB, id, reason)
 
 	return s.getPaymentDetailByID(ctx, id)

@@ -16,6 +16,7 @@ type InvoiceService struct {
 	DB            *pgxpool.Pool
 	ClientService *ClientService
 	WhatsApp      *WhatsAppService
+	Email         *EmailService
 	PDF           *PDFService
 }
 
@@ -1088,8 +1089,8 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 		go NotifyInvoiceNew(s.DB, invoice.ID)
 	}
 
-	if invoice.Status == "SENT" && s.WhatsApp != nil {
-		go SendInvoiceCreatedWhatsApp(s.DB, s.WhatsApp, s.PDF, invoice.ID)
+	if invoice.Status == "SENT" && (s.WhatsApp != nil || s.Email != nil) {
+		go SendInvoiceCreatedWhatsApp(s.DB, s.WhatsApp, s.Email, s.PDF, invoice.ID)
 	}
 
 	invoice.Items, err = s.fetchItems(invoice.ID)
@@ -1436,8 +1437,8 @@ func (s *InvoiceService) updateInvoiceInternal(
 		return nil, err
 	}
 
-	if autoSendWA && previousStatus == "DRAFT" && invoice.Status == "SENT" && s.WhatsApp != nil {
-		go SendInvoiceCreatedWhatsApp(s.DB, s.WhatsApp, s.PDF, invoice.ID)
+	if autoSendWA && previousStatus == "DRAFT" && invoice.Status == "SENT" && (s.WhatsApp != nil || s.Email != nil) {
+		go SendInvoiceCreatedWhatsApp(s.DB, s.WhatsApp, s.Email, s.PDF, invoice.ID)
 	}
 
 	// Ambil kembali seluruh relasi
@@ -1521,8 +1522,8 @@ func (s *InvoiceService) SendInvoice(id string) (*models.Invoice, error) {
 		return nil, fmt.Errorf("gagal mengubah status invoice: %v", err)
 	}
 
-	if err := SendInvoiceToClient(s.DB, s.WhatsApp, s.PDF, id); err != nil {
-		return updated, fmt.Errorf("invoice berstatus SENT tetapi pengiriman whatsapp gagal: %v", err)
+	if err := SendInvoiceToClient(s.DB, s.WhatsApp, s.Email, s.PDF, id); err != nil {
+		return updated, fmt.Errorf("invoice berstatus SENT tetapi pengiriman notifikasi gagal: %v", err)
 	}
 
 	return updated, nil
