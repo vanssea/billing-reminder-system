@@ -33,18 +33,62 @@ func (s *ReminderService) StartReminderScheduler(ctx context.Context) {
 	defer ticker.Stop()
 
 	// Jalankan langsung sekali saat start, lalu ulangi tiap interval.
-	s.processDueReminders(ctx)
-	s.processOverdueInvoices(ctx)
+	s.RunReminderCycle(ctx)
 	for {
 		select {
 		case <-ctx.Done():
 			log.Println("Reminder scheduler berhenti.")
 			return
 		case <-ticker.C:
-			s.processDueReminders(ctx)
-			s.processOverdueInvoices(ctx)
+			s.RunReminderCycle(ctx)
 		}
 	}
+}
+
+// reminderAdvisoryLockID adalah ID lock PostgreSQL yang dipakai untuk
+// memastikan hanya satu runner reminder (scheduler in-process ATAU cron worker)
+// yang berjalan pada satu waktu, sehingga tidak ada pengiriman ganda.
+const reminderAdvisoryLockID = 72420101
+
+// tryAcquireReminderLock mencoba mengambil advisory lock tanpa memblokir.
+// Mengembalikan true beserta fungsi release jika lock berhasil didapatkan.
+// Aman dipanggil dari scheduler in-process maupun cmd/reminderworker.
+func (s *ReminderService) tryAcquireReminderLock(ctx context.Context) (release func(), ok bool) {
+	conn, err := s.DB.Acquire(ctx)
+	if err != nil {
+		log.Printf("Gagal ambil koneksi untuk lock reminder: %v", err)
+		return nil, false
+	}
+	var locked bool
+	if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", reminderAdvisoryLockID).Scan(&locked); err != nil {
+		conn.Release()
+		log.Printf("Gagal mengunci reminder lock: %v", err)
+		return nil, false
+	}
+	if !locked {
+		conn.Release()
+		return nil, false
+	}
+	return func() {
+		conn.Exec(ctx, "SELECT pg_advisory_unlock($1)", reminderAdvisoryLockID)
+		conn.Release()
+	}, true
+}
+
+// RunReminderCycle menjalankan satu siklus reminder + proses overdue.
+// Dipakai oleh StartReminderScheduler (loop) dan cmd/reminderworker (cron).
+// Jika ada runner lain yang memegang lock, siklus ini dilewati dan mengembalikan
+// (false, nil) agar tidak terjadi pengiriman ganda.
+func (s *ReminderService) RunReminderCycle(ctx context.Context) (bool, error) {
+	release, ok := s.tryAcquireReminderLock(ctx)
+	if !ok {
+		return false, nil
+	}
+	defer release()
+
+	s.processDueReminders(ctx)
+	s.processOverdueInvoices(ctx)
+	return true, nil
 }
 
 // processDueReminders memproses seluruh reminder yang sudah waktunya dikirim.
@@ -83,10 +127,6 @@ type dueReminderRow struct {
 // tidak ada di daftar tidak pernah dipilih (tanpa mengubah record).
 // Jika emailEnabled false, client tanpa email tetap dipilih (hanya WA).
 func (s *ReminderService) getDueReminders(ctx context.Context, enabledTypes []string, emailEnabled bool) ([]dueReminderRow, error) {
-	requiredEmail := ""
-	if emailEnabled {
-		requiredEmail = "WAJIB"
-	}
 	rows, err := s.DB.Query(ctx, `
 		SELECT
 			r.id,
@@ -104,10 +144,10 @@ WHERE r.status = 'PENDING'
 		  AND r.reminder_type != ''
 		  AND r.reminder_type = ANY($1)
 		  AND c.phone IS NOT NULL AND c.phone != ''
-		  AND c.email != $2
+		  AND ($2::boolean IS FALSE OR (c.email IS NOT NULL AND c.email != ''))
 ORDER BY r.scheduled_at ASC
 		LIMIT 50
-	`, enabledTypes, requiredEmail)
+	`, enabledTypes, emailEnabled)
 	if err != nil {
 		return nil, err
 	}

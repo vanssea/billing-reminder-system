@@ -197,6 +197,21 @@ func (s *WhatsAppService) IsConnected() bool {
 	return s.Client != nil && s.Client.IsConnected() && s.Client.Store != nil && s.Client.Store.ID != nil
 }
 
+// WaitUntilConnected menunggu hingga koneksi WhatsApp aktif atau konteks habis.
+// Dipakai batch worker (cron) karena NewWhatsAppService terhubung secara async.
+func (s *WhatsAppService) WaitUntilConnected(ctx context.Context) bool {
+	for {
+		if s.IsConnected() {
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+}
+
 // Close memutus koneksi saat backend dimatikan.
 func (s *WhatsAppService) Close() {
 	if s.Client != nil {
