@@ -29,20 +29,19 @@ func main() {
 	defer db.Close()
 
 	// Membuat service.
-	// Mode cron (REMINDER_SCHEDULER_DISABLED=true): koneksi WhatsApp hanya
-	// dipakai reminderworker.exe. Backend tidak menyambung agar tidak ada dua
-	// proses yang memakai sesi WA yang sama (WhatsApp hanya izinkan 1 koneksi
-	// per device; 2 koneksi = stream replaced / saling lempar koneksi).
+	// Koneksi WhatsApp dikelola reminderworker.exe (cron job OS). Backend tidak
+	// menyambung WhatsApp (WhatsApp hanya izinkan 1 koneksi per device; 2 koneksi
+	// = saling lempar). Set WHATSAPP_DISABLED=false hanya saat perlu pairing ulang.
 	// Email tetap aktif di backend.
 	var waService *services.WhatsAppService
-	if os.Getenv("REMINDER_SCHEDULER_DISABLED") != "true" {
+	if os.Getenv("WHATSAPP_DISABLED") != "true" {
 		var waErr error
 		waService, waErr = services.NewWhatsAppService()
 		if waErr != nil {
 			log.Printf("WhatsApp service tidak aktif: %v (notifikasi WA dilewati)", waErr)
 		}
 	} else {
-		log.Println("Mode cron aktif: WhatsApp dikelola reminderworker.exe; notifikasi WA dari backend dilewati.")
+		log.Println("Mode cron aktif: WhatsApp dikelola reminderworker.exe; WA dari backend dilewati.")
 	}
 	pdfService := services.NewPDFService()
 	emailService := services.NewEmailService()
@@ -136,13 +135,9 @@ func main() {
 	routes.AppNotificationRoutes(router, appNotificationHandler, authService)
 	routes.SettingsRoutes(router, settingsHandler, authService)
 
-	// Menjalankan scheduler reminder di background (H-30 s/d H-1 + overdue).
-	// Set REMINDER_SCHEDULER_DISABLED=true saat memakai cron worker
-	// (backend/cmd/reminderworker) sebagai pengganti scheduler in-process,
-	// agar tidak ada pengiriman ganda.
-	if os.Getenv("REMINDER_SCHEDULER_DISABLED") != "true" {
-		go reminderService.StartReminderScheduler(context.Background())
-	}
+	// Pengiriman reminder otomatis ditangani reminderworker.exe (cron job OS,
+	// dijalankan tiap 1 menit oleh Windows Task Scheduler). Tidak ada scheduler
+	// in-process di backend agar tidak ada pengiriman ganda.
 
 	// Menjalankan watcher notifikasi invoice overdue untuk lonceng admin
 	go appNotificationService.StartOverdueWatcher(context.Background())

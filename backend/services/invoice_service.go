@@ -1089,7 +1089,7 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 		go NotifyInvoiceNew(s.DB, invoice.ID)
 	}
 
-	if invoice.Status == "SENT" && (s.WhatsApp != nil || s.Email != nil) {
+	if invoice.Status == "SENT" {
 		go SendInvoiceCreatedWhatsApp(s.DB, s.WhatsApp, s.Email, s.PDF, invoice.ID)
 	}
 
@@ -1437,7 +1437,7 @@ func (s *InvoiceService) updateInvoiceInternal(
 		return nil, err
 	}
 
-	if autoSendWA && previousStatus == "DRAFT" && invoice.Status == "SENT" && (s.WhatsApp != nil || s.Email != nil) {
+	if autoSendWA && previousStatus == "DRAFT" && invoice.Status == "SENT" {
 		go SendInvoiceCreatedWhatsApp(s.DB, s.WhatsApp, s.Email, s.PDF, invoice.ID)
 	}
 
@@ -1489,14 +1489,14 @@ func (s *InvoiceService) updateInvoiceInternal(
 // pembaruan yang sudah ada, lalu mengirim pesan teks + PDF invoice ke
 // WhatsApp client secara sinkron. Error yang dikembalikan mencerminkan
 // hasil yang sebenarnya (tanpa sukses palsu).
-func (s *InvoiceService) SendInvoice(id string) (*models.Invoice, error) {
+func (s *InvoiceService) SendInvoice(id string) (*models.Invoice, *InvoiceDeliveryResult, error) {
 	current, err := s.GetInvoiceByID(id)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if current.Status != "DRAFT" {
-		return nil, fmt.Errorf("hanya invoice berstatus DRAFT yang bisa dikirim")
+		return nil, nil, fmt.Errorf("hanya invoice berstatus DRAFT yang bisa dikirim")
 	}
 
 	items := make([]models.InvoiceItemRequest, 0, len(current.Items))
@@ -1519,14 +1519,15 @@ func (s *InvoiceService) SendInvoice(id string) (*models.Invoice, error) {
 
 	updated, err := s.updateInvoiceInternal(id, req, false)
 	if err != nil {
-		return nil, fmt.Errorf("gagal mengubah status invoice: %v", err)
+		return nil, nil, fmt.Errorf("gagal mengubah status invoice: %v", err)
 	}
 
-	if err := SendInvoiceToClient(s.DB, s.WhatsApp, s.Email, s.PDF, id); err != nil {
-		return updated, fmt.Errorf("invoice berstatus SENT tetapi pengiriman notifikasi gagal: %v", err)
+	delivery, err := SendInvoiceToClient(s.DB, s.WhatsApp, s.Email, s.PDF, id)
+	if err != nil {
+		return updated, delivery, fmt.Errorf("invoice berstatus SENT tetapi pengiriman notifikasi gagal: %v", err)
 	}
 
-	return updated, nil
+	return updated, delivery, nil
 }
 
 // ============================================================
@@ -1545,9 +1546,23 @@ func (s *InvoiceService) DeleteInvoice(id string) error {
 		return err
 	}
 
+// Hapus antrian notifikasi WhatsApp (outbox) yang menunjuk invoice ini,
+	// baik lewat invoice_id maupun via payment milik invoice tersebut, supaya
+	// tidak ada retry bodong setelah invoice dihapus.
 	_, err = s.DB.Exec(
 		context.Background(),
-		`DELETE FROM payments WHERE invoice_id = $1`,
+		`DELETE FROM notification_outbox
+		 WHERE invoice_id = $1
+		    OR payment_id IN (SELECT id FROM payments WHERE invoice_id = $1)`,
+		id,
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.DB.Exec(
+		context.Background(),
+		`DELETE FROM reminders WHERE invoice_id = $1`,
 		id,
 	)
 	if err != nil {

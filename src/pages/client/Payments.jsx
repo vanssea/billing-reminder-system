@@ -265,7 +265,6 @@ export default function ClientPayments() {
       await createPayment(
         {
           invoice_id: form.invoiceId,
-          client_id: client.id,
           amount: Number(form.amount),
           payment_date: form.paymentDate,
           payment_method: form.paymentMethod,

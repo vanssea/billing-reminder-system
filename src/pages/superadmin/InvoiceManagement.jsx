@@ -195,8 +195,8 @@ const filteredInvoices = useMemo(() => {
       const payload = {
         invoice_number: editingId ? form.invoice_number.trim() : "",
         client_id: form.client_id,
-        invoice_date: new Date(`${form.invoice_date}T00:00:00Z`).toISOString(),
-        due_date: new Date(`${form.due_date}T00:00:00Z`).toISOString(),
+        invoice_date: form.invoice_date,
+        due_date: form.due_date,
         status: form.status,
         notes: form.notes.trim() || null,
         created_by: null,
@@ -237,8 +237,28 @@ const filteredInvoices = useMemo(() => {
     if (!sendTarget) return;
     setSaving(true);
     try {
-      await sendInvoice(sendTarget.id, accessToken);
-      setSuccess(`Invoice ${sendTarget.invoice_number} berhasil dikirim ke WhatsApp client.`);
+      const result = await sendInvoice(sendTarget.id, accessToken);
+      const invoice = result?.invoice || result;
+      const delivery = result?.delivery;
+
+      const parts = [`Invoice ${invoice?.invoice_number || sendTarget.invoice_number} berstatus SENT.`];
+      if (delivery) {
+        if (delivery.whatsapp_status === "queued") {
+          parts.push("Notifikasi WhatsApp sudah dijadwalkan oleh sistem.");
+        } else if (delivery.whatsapp_status === "skipped_wa") {
+          parts.push("WhatsApp dilewati: client tidak memiliki nomor telepon.");
+        } else if (delivery.whatsapp_status === "error") {
+          parts.push("Gagal menjadwalkan notifikasi WhatsApp.");
+        }
+        if (delivery.email_status === "sent") {
+          parts.push("Email invoicer terkirim.");
+        } else if (delivery.email_status === "skipped_email") {
+          parts.push("Email dilewati: alamat email tidak tersedia.");
+        } else if (delivery.email_status === "failed") {
+          parts.push(`Email gagal dikirim: ${delivery.email_error || "error tidak diketahui"}`);
+        }
+      }
+      setSuccess(parts.join(" "));
       setSendTarget(null);
       const refreshed = await getInvoices(accessToken);
       setInvoices(refreshed);
