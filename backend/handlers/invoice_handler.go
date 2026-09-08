@@ -179,7 +179,7 @@ func (h *InvoiceHandler) UpdateInvoice(w http.ResponseWriter, r *http.Request) {
 func (h *InvoiceHandler) SendInvoice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	invoice, err := h.Service.SendInvoice(id)
+	invoice, delivery, err := h.Service.SendInvoice(id)
 
 	if err != nil {
 		message := err.Error()
@@ -199,6 +199,14 @@ func (h *InvoiceHandler) SendInvoice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+
+	if delivery != nil {
+		json.NewEncoder(w).Encode(map[string]any{
+			"invoice":  invoice,
+			"delivery": delivery,
+		})
+		return
+	}
 
 	json.NewEncoder(w).Encode(invoice)
 }

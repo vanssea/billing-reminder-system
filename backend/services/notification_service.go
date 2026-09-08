@@ -13,78 +13,50 @@ func whatsappReady(wa *WhatsAppService) bool {
 	return wa != nil && wa.IsConnected()
 }
 
-// SendInvoiceCreatedWhatsApp mengirim pesan teks + PDF invoice ke client
-// saat invoice pertama kali dibuat dengan status SENT.
-// Wrapper fire-and-forget untuk alur otomatis (create/update invoice).
+// SendInvoiceCreatedWhatsApp menjadwalkan notifikasi invoice baru ke client.
+// Email dikirim di sini; WhatsApp ditulis ke tabel outbox lalu dikirim oleh
+// reminderworker.exe (cron) pada menit berikutnya karena koneksi WA hanya
+// dimiliki worker. Wrapper fire-and-forget untuk alur otomatis (create/update).
 func SendInvoiceCreatedWhatsApp(db *pgxpool.Pool, wa *WhatsAppService, email *EmailService, pdf *PDFService, invoiceID string) {
-	if err := SendInvoiceToClient(db, wa, email, pdf, invoiceID); err != nil {
+	if _, err := SendInvoiceToClient(db, wa, email, pdf, invoiceID); err != nil {
 		log.Printf("Invoice notifikasi otomatis gagal untuk %s: %v", invoiceID, err)
 	}
 }
 
-// SendInvoiceToClient mengirim pesan teks + PDF invoice ke WhatsApp
-// dan email ke client secara sinkron.
-func SendInvoiceToClient(db *pgxpool.Pool, wa *WhatsAppService, email *EmailService, pdf *PDFService, invoiceID string) error {
-	hasWhatsApp := whatsappReady(wa)
-	hasEmail := email != nil
+// InvoiceDeliveryResult memuat status nyata pengiriman notifikasi invoice
+// sehingga UI tidak mengklaim sukses palsu saat saluran tertentu gagal.
+type InvoiceDeliveryResult struct {
+	WhatsAppStatus string `json:"whatsapp_status"` // "queued" | "skipped_wa" | "error"
+	EmailStatus    string `json:"email_status"`    // "sent" | "skipped_email" | "failed"
+	EmailError     string `json:"email_error,omitempty"`
+}
 
-	if !hasWhatsApp && !hasEmail {
-		return fmt.Errorf("WhatsApp dan Email belum tersedia")
-	}
-
+// SendInvoiceToClient mengirim email tagihan baru ke client secara sinkron dan
+// menjadwalkan WhatsApp tagihan baru lewat outbox (dikirim cron worker).
+// Mengembalikan detail status setiap saluran; error hanya jika pemasukan
+// antrian outbox gagal (WA tidak akan pernah terkirim).
+func SendInvoiceToClient(db *pgxpool.Pool, wa *WhatsAppService, email *EmailService, pdf *PDFService, invoiceID string) (*InvoiceDeliveryResult, error) {
+	result := &InvoiceDeliveryResult{}
 	inv, err := getInvoiceData(context.Background(), db, invoiceID)
 	if err != nil {
-		return fmt.Errorf("gagal ambil data invoice: %v", err)
+		return result, fmt.Errorf("gagal ambil data invoice: %v", err)
 	}
 
-	// Kirim via WhatsApp
-	if hasWhatsApp {
-		if strings.TrimSpace(inv.ClientPhone) == "" {
-			log.Printf("Invoice WhatsApp dilewati untuk %s: client tidak memiliki nomor telepon", inv.InvoiceNumber)
+	// WhatsApp dijadwalkan lewat outbox; backend tidak menyambung WA sehingga
+	// satu koneksi per device tetap terjaga.
+	if strings.TrimSpace(inv.ClientPhone) != "" {
+		if err := EnqueueInvoiceCreatedWA(db, invoiceID); err != nil {
+			result.WhatsAppStatus = "error"
 		} else {
-			message := fmt.Sprintf(`🔔 *Tagihan Baru*
-
-Halo, *%s*,
-
-Tagihan invoice *%s* sebesar *Rp %s*
-telah dibuat.
-
-📅 Jatuh tempo: *%s*
-
-Silakan melakukan pembayaran sebelum tanggal jatuh tempo.
-
-Terima kasih.
-*Billing Reminder*`,
-				inv.ClientCompany,
-				inv.InvoiceNumber,
-				formatRupiah(inv.Total),
-				formatTanggalIndo(inv.DueDate),
-			)
-
-			if err := wa.Send(inv.ClientPhone, message); err != nil {
-				log.Printf("Invoice WhatsApp gagal terkirim untuk %s ke %s: %v", inv.InvoiceNumber, inv.ClientPhone, err)
-			} else {
-				log.Printf("Invoice WhatsApp teks terkirim untuk %s ke %s", inv.InvoiceNumber, inv.ClientPhone)
-
-				if pdf != nil {
-					pdfBytes, err := pdf.RenderInvoicePDF(inv)
-					if err == nil {
-						fileName := "Invoice-" + strings.ReplaceAll(inv.InvoiceNumber, "/", "-") + ".pdf"
-						if err := wa.SendDocument(inv.ClientPhone, fileName, pdfBytes); err != nil {
-							log.Printf("Invoice WhatsApp PDF gagal untuk %s: %v", inv.InvoiceNumber, err)
-						} else {
-							log.Printf("Invoice WhatsApp PDF terkirim untuk %s ke %s", inv.InvoiceNumber, inv.ClientPhone)
-						}
-					} else {
-						log.Printf("Invoice WhatsApp: gagal generate PDF untuk %s: %v", inv.InvoiceNumber, err)
-					}
-				}
-			}
+			result.WhatsAppStatus = "queued"
 		}
+	} else {
+		result.WhatsAppStatus = "skipped_wa"
+		log.Printf("Invoice WhatsApp dijadwalkan dilewati untuk %s: client tidak memiliki nomor telepon", inv.InvoiceNumber)
 	}
 
 	// Kirim via Email
-	if hasEmail && strings.TrimSpace(inv.ClientEmail) != "" {
+	if email != nil && strings.TrimSpace(inv.ClientEmail) != "" {
 		if err := email.SendInvoiceCreatedEmail(
 			inv.ClientEmail,
 			inv.ClientCompany,
@@ -92,13 +64,19 @@ Terima kasih.
 			formatTanggalIndo(inv.DueDate),
 			formatRupiah(inv.Total),
 		); err != nil {
+			result.EmailStatus = "failed"
+			result.EmailError = err.Error()
 			log.Printf("Invoice email gagal untuk %s ke %s: %v", inv.InvoiceNumber, inv.ClientEmail, err)
 		} else {
+			result.EmailStatus = "sent"
 			log.Printf("Invoice email terkirim untuk %s ke %s", inv.InvoiceNumber, inv.ClientEmail)
 		}
+	} else {
+		result.EmailStatus = "skipped_email"
+		log.Printf("Invoice email dilewati untuk %s: email kosong atau service email nonaktif", inv.InvoiceNumber)
 	}
 
-	return nil
+	return result, nil
 }
 
 type paymentNotification struct {
@@ -152,29 +130,9 @@ func sendPaymentApprovedWhatsApp(db *pgxpool.Pool, wa *WhatsAppService, email *E
 		return
 	}
 
-	// Kirim via WhatsApp
-	if whatsappReady(wa) && strings.TrimSpace(n.Phone) != "" {
-		message := fmt.Sprintf(`✅ *Pembayaran Berhasil*
-
-Halo, *%s*,
-
-Pembayaran untuk invoice *%s*
-sebesar *Rp %s* telah berhasil diverifikasi.
-
-Status: *PAID*
-
-Terima kasih.
-*Billing Reminder*`,
-			n.ClientCompany,
-			n.InvoiceNumber,
-			formatRupiah(n.Amount),
-		)
-
-		if err := wa.Send(n.Phone, message); err != nil {
-			log.Printf("Payment confirmation WA gagal terkirim untuk %s ke %s: %v", n.InvoiceNumber, n.Phone, err)
-		} else {
-			log.Printf("Payment confirmation WA terkirim untuk %s ke %s", n.InvoiceNumber, n.Phone)
-		}
+	// Konfirmasi WhatsApp dijadwalkan lewat outbox (dikirim cron worker).
+	if strings.TrimSpace(n.Phone) != "" {
+		EnqueuePaymentApprovedWA(db, paymentID)
 	}
 
 	// Kirim via Email
@@ -201,35 +159,9 @@ func sendPaymentRejectedWhatsApp(db *pgxpool.Pool, wa *WhatsAppService, email *E
 		return
 	}
 
-	// Kirim via WhatsApp
-	if whatsappReady(wa) && strings.TrimSpace(n.Phone) != "" {
-		message := fmt.Sprintf(`⚠️ *Pembayaran Tidak Dapat Diverifikasi*
-
-Halo, *%s*,
-
-Pembayaran untuk invoice *%s*
-sebesar *Rp %s* belum dapat kami verifikasi.
-
-Status: *REJECTED*
-
-Alasan:
-%s
-
-Silakan melakukan pembayaran kembali atau menghubungi pihak terkait.
-
-Terima kasih.
-*Billing Reminder*`,
-			n.ClientCompany,
-			n.InvoiceNumber,
-			formatRupiah(n.Amount),
-			reason,
-		)
-
-		if err := wa.Send(n.Phone, message); err != nil {
-			log.Printf("Payment rejection WA gagal terkirim untuk %s ke %s: %v", n.InvoiceNumber, n.Phone, err)
-		} else {
-			log.Printf("Payment rejection WA terkirim untuk %s ke %s", n.InvoiceNumber, n.Phone)
-		}
+	// Konfirmasi WhatsApp dijadwalkan lewat outbox (dikirim cron worker).
+	if strings.TrimSpace(n.Phone) != "" {
+		EnqueuePaymentRejectedWA(db, paymentID, reason)
 	}
 
 	// Kirim via Email
@@ -359,4 +291,71 @@ Terima kasih.
 			}
 		}
 	}
+}
+
+// buildInvoiceCreatedMessage menyusun isi pesan WhatsApp tagihan baru.
+// Dipakai oleh backend (lewat outbox) dan reminderworker (cron).
+func buildInvoiceCreatedMessage(inv *InvoiceData) string {
+	return fmt.Sprintf(`🔔 *Tagihan Baru*
+
+Halo, *%s*,
+
+Tagihan invoice *%s* sebesar *Rp %s*
+telah dibuat.
+
+📅 Jatuh tempo: *%s*
+
+Silakan melakukan pembayaran sebelum tanggal jatuh tempo.
+
+Terima kasih.
+*Billing Reminder*`,
+		inv.ClientCompany,
+		inv.InvoiceNumber,
+		formatRupiah(inv.Total),
+		formatTanggalIndo(inv.DueDate),
+	)
+}
+
+// buildPaymentApprovedMessage menyusun isi pesan WhatsApp pembayaran disetujui.
+func buildPaymentApprovedMessage(n *paymentNotification) string {
+	return fmt.Sprintf(`✅ *Pembayaran Berhasil*
+
+Halo, *%s*,
+
+Pembayaran untuk invoice *%s*
+sebesar *Rp %s* telah berhasil diverifikasi.
+
+Status: *PAID*
+
+Terima kasih.
+*Billing Reminder*`,
+		n.ClientCompany,
+		n.InvoiceNumber,
+		formatRupiah(n.Amount),
+	)
+}
+
+// buildPaymentRejectedMessage menyusun isi pesan WhatsApp pembayaran ditolak.
+func buildPaymentRejectedMessage(n *paymentNotification, reason string) string {
+	return fmt.Sprintf(`⚠️ *Pembayaran Tidak Dapat Diverifikasi*
+
+Halo, *%s*,
+
+Pembayaran untuk invoice *%s*
+sebesar *Rp %s* belum dapat kami verifikasi.
+
+Status: *REJECTED*
+
+Alasan:
+%s
+
+Silakan melakukan pembayaran kembali atau menghubungi pihak terkait.
+
+Terima kasih.
+*Billing Reminder*`,
+		n.ClientCompany,
+		n.InvoiceNumber,
+		formatRupiah(n.Amount),
+		reason,
+	)
 }

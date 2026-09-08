@@ -19,11 +19,25 @@ import (
 // WhatsApp, lalu memproses semua reminder PENDING yang jatuh tempo beserta
 // invoice yang melewati jatuh tempo, kemudian keluar.
 //
-// Siklus ini memakai advisory lock yang sama dengan scheduler in-process
-// (main.go), sehingga tidak akan terjadi pengiriman ganda saat keduanya jalan.
-// Saat memakai worker ini, set REMINDER_SCHEDULER_DISABLED=true di .env.
+// Siklus ini memakai advisory lock PostgreSQL sehingga tidak akan terjadi
+// pengiriman ganda.
+// WhatsApp hanya izinkan satu koneksi per device. Aturan kepemilikan koneksi
+// (XOR dengan backend main.go):
+//   - WHATSAPP_DISABLED=true  -> worker yang menyambung WA (mode cron normal).
+//   - WHATSAPP_DISABLED=false/kosong -> worker melewatkan WA (digunakan saat
+//     pairing ulang lewat backend /api/whatsapp/pair).
 func main() {
 	loadEnv()
+
+	started := time.Now()
+
+	logFile, err := setupFileLogger()
+	if err != nil {
+		log.Printf("Peringatan: gagal membuka file log: %v (log hanya ke console)", err)
+	} else {
+		defer logFile.Close()
+	}
+	logInfo("Worker started")
 
 	// Antrian lock ini opsional namun mencegah tumpang-tindih antar sesi worker
 	// (mis. run sebelumnya > 1 menit). Implementasi konkurensi ganda tetap
@@ -32,10 +46,31 @@ func main() {
 	defer db.Close()
 
 	pdfService := services.NewPDFService()
-	waService, waErr := services.NewWhatsAppService()
-	if waErr != nil {
-		log.Printf("WhatsApp service tidak aktif: %v (WA dilewati)", waErr)
+
+	// Koneksi WhatsApp dimiliki worker hanya saat WHATSAPP_DISABLED=true.
+	// Saat false, backend memegang koneksi untuk keperluan pairing ulang; worker
+	// ikut connect akan membuat dua koneksi ke device yang sama (saling lempar).
+	var waService *services.WhatsAppService
+	if os.Getenv("WHATSAPP_DISABLED") == "true" {
+		var waErr error
+		waService, waErr = services.NewWhatsAppService()
+		if waErr != nil {
+			log.Printf("WhatsApp service tidak aktif: %v (WA dilewati)", waErr)
+		} else {
+			// NewWhatsAppService terhubung secara async; tunggu sebentar secara sinkron.
+			connCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			connected := waService.WaitUntilConnected(connCtx)
+			cancel()
+			if connected {
+				log.Println("WhatsApp terhubung.")
+			} else {
+				log.Println("WhatsApp belum terhubung dalam 30 detik; lanjut tanpa WA.")
+			}
+		}
+	} else {
+		log.Println("WHATSAPP_DISABLED=false: koneksi WA dipegang backend (mode pairing); worker melewati WA.")
 	}
+
 	emailService := services.NewEmailService()
 	if emailService == nil {
 		log.Println("Email service tidak aktif: SMTP_HOST belum dikonfigurasi")
@@ -46,32 +81,27 @@ func main() {
 	reminderService.Email = emailService
 	reminderService.PDF = pdfService
 
-	// NewWhatsAppService terhubung secara async; tunggu sebentar secara sinkron.
-	if waErr == nil && waService != nil {
-		connCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		connected := waService.WaitUntilConnected(connCtx)
-		cancel()
-		if connected {
-			log.Println("WhatsApp terhubung.")
-		} else {
-			log.Println("WhatsApp belum terhubung dalam 30 detik; lanjut tanpa WA.")
-		}
-	}
-
+	logInfo("Reminder cycle started")
 	ran, err := reminderService.RunReminderCycle(context.Background())
 	if err != nil {
-		log.Printf("Reminder cycle error: %v", err)
+		logError("Reminder cycle error: %v", err)
 		os.Exit(1)
 	}
 	if ran {
-		log.Println("Reminder cycle selesai.")
+		logInfo("Reminder cycle selesai duration=%s", time.Since(started).Round(time.Millisecond))
 	} else {
-		log.Println("Cycle dilewati: proses lain memegang lock reminder.")
+		logInfo("Cycle dilewati: proses lain memegang lock reminder (advisory lock).")
 	}
+
+	// Kirim notifikasi WA yang dijadwalkan backend lewat tabel outbox
+	// (invoice baru, pembayaran disetujui/ditolak).
+	logInfo("Outbox processing started")
+	reminderService.ProcessOutbox(context.Background())
 
 	if waService != nil {
 		waService.Close()
 	}
+	logInfo("Worker finished duration=%s", time.Since(started).Round(time.Millisecond))
 }
 
 // loadEnv membaca .env dari direktori kerja, lalu fallback ke folder binary.

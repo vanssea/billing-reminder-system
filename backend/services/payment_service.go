@@ -293,7 +293,10 @@ func (s *PaymentService) getPaymentDetailByID(ctx context.Context, id string) (*
 }
 
 func (s *PaymentService) CreatePayment(req models.CreatePaymentRequest) (*models.Payment, error) {
-	paymentDate, _ := time.Parse("2006-01-02", req.PaymentDate)
+	paymentDate, err := parseDateFlexible(req.PaymentDate)
+	if err != nil {
+		return nil, fmt.Errorf("format tanggal pembayaran tidak valid (gunakan YYYY-MM-DD): %v", err)
+	}
 
 	ctx := context.Background()
 
@@ -375,9 +378,12 @@ func (s *PaymentService) UpdatePayment(paymentID string, req models.UpdatePaymen
 		argIdx++
 	}
 	if req.PaymentDate != nil {
+		dt, perr := parseDateFlexible(*req.PaymentDate)
+		if perr != nil {
+			return nil, fmt.Errorf("format tanggal pembayaran tidak valid (gunakan YYYY-MM-DD): %v", perr)
+		}
 		setParts = append(setParts, "payment_date = $"+strconv.Itoa(argIdx))
-		d, _ := time.Parse("2006-01-02", *req.PaymentDate)
-		args = append(args, d)
+		args = append(args, dt)
 		argIdx++
 	}
 	if req.PaymentMethod != nil {

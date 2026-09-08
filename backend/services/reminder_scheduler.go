@@ -5,45 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 )
-
-// reminderSchedulerInterval adalah jarak waktu pemeriksaan reminder
-// yang sudah jatuh tempo.
-const reminderSchedulerInterval = 60 * time.Second
-
-// StartReminderScheduler menjalankan loop background yang memproses
-// reminder PENDING yang sudah jatuh tempo setiap 1 menit.
-func (s *ReminderService) StartReminderScheduler(ctx context.Context) {
-	if s.WhatsApp == nil && s.Email == nil {
-		log.Println("Reminder scheduler aktif tetapi WhatsApp dan Email belum tersedia.")
-		return
-	}
-
-	channels := []string{}
-	if s.WhatsApp != nil {
-		channels = append(channels, "WhatsApp")
-	}
-	if s.Email != nil {
-		channels = append(channels, "Email")
-	}
-	log.Printf("Reminder scheduler aktif via: %s", strings.Join(channels, " + "))
-
-	ticker := time.NewTicker(reminderSchedulerInterval)
-	defer ticker.Stop()
-
-	// Jalankan langsung sekali saat start, lalu ulangi tiap interval.
-	s.RunReminderCycle(ctx)
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("Reminder scheduler berhenti.")
-			return
-		case <-ticker.C:
-			s.RunReminderCycle(ctx)
-		}
-	}
-}
 
 // reminderAdvisoryLockID adalah ID lock PostgreSQL yang dipakai untuk
 // memastikan hanya satu runner reminder (scheduler in-process ATAU cron worker)
@@ -76,7 +38,7 @@ func (s *ReminderService) tryAcquireReminderLock(ctx context.Context) (release f
 }
 
 // RunReminderCycle menjalankan satu siklus reminder + proses overdue.
-// Dipakai oleh StartReminderScheduler (loop) dan cmd/reminderworker (cron).
+// Dipanggil oleh cmd/reminderworker (cron) saat OS menjalankannya.
 // Jika ada runner lain yang memegang lock, siklus ini dilewati dan mengembalikan
 // (false, nil) agar tidak terjadi pengiriman ganda.
 func (s *ReminderService) RunReminderCycle(ctx context.Context) (bool, error) {
@@ -105,6 +67,7 @@ func (s *ReminderService) processDueReminders(ctx context.Context) {
 		log.Println("Gagal mengambil reminder yang jatuh tempo:", err)
 		return
 	}
+	log.Printf("Reminder cycle: %d reminder jatuh tempo ditemukan.", len(reminders))
 
 	for _, r := range reminders {
 		if err := s.processReminder(ctx, r, emailEnabled); err != nil {

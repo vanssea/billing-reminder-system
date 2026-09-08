@@ -64,6 +64,16 @@ func formatTanggalIndo(t time.Time) string {
 	return fmt.Sprintf("%d %s %d", t.Day(), bulanIndonesia[t.Month()], t.Year())
 }
 
+// parseDateFlexible mem-parsing tanggal baik format RFC3339 (mis. dari
+// toISOString Frontend) maupun YYYY-MM-DD. Dipakai agar backend toleran
+// terhadap kedua format sehingga tanggal tidak bergeser/patah.
+func parseDateFlexible(s string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, nil
+	}
+	return time.Parse("2006-01-02", s)
+}
+
 // formatRupiah memformat angka menjadi "1.250.000,00".
 func formatRupiah(total float64) string {
 	parts := strings.Split(fmt.Sprintf("%.2f", total), ".")
