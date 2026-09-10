@@ -295,9 +295,7 @@ export default function ClientInvoices() {
                             type="button"
                             onClick={(event) => {
                               event.stopPropagation();
-                              navigate(`/client/invoices/${invoice.invoice_number}`, {
-                                state: { pdf: true },
-                              });
+                              navigate(`/client/invoices/${invoice.invoice_number}`);
                             }}
                             aria-label={`Download PDF ${invoice.invoice_number}`}
                             title="Download PDF"
