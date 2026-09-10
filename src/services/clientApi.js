@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:8080/api/admin/clients";
+const API_URL = import.meta.env.VITE_API_URL + "/api/admin/clients";
 
 function authHeaders(token, extra = {}) {
   return {
@@ -69,7 +69,7 @@ export async function deleteClient(id, token) {
 }
 
 export async function getClientByProfileId(profileId, token) {
-  const response = await fetch(`http://localhost:8080/api/clients/profile/${profileId}`, {
+  const response = await fetch(`${import.meta.env.VITE_API_URL}/api/clients/profile/${profileId}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -83,7 +83,7 @@ export async function getClientByProfileId(profileId, token) {
 }
 
 export async function createOrUpdateClientProfile(data, token) {
-  const response = await fetch("http://localhost:8080/api/clients/profile", {
+  const response = await fetch(import.meta.env.VITE_API_URL + "/api/clients/profile", {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -101,7 +101,7 @@ export async function createOrUpdateClientProfile(data, token) {
 }
 
 export async function createPurchaseRequest(data, token) {
-  const response = await fetch("http://localhost:8080/api/client/purchase", {
+  const response = await fetch(import.meta.env.VITE_API_URL + "/api/client/purchase", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

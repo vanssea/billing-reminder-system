@@ -78,7 +78,7 @@ func (h *InvoiceHandler) GetInvoiceByID(w http.ResponseWriter, r *http.Request) 
 	id := chi.URLParam(r, "id")
 	profile := middleware.ProfileFromContext(r)
 
-	if profile != nil && profile.Role == models.RoleClient {
+	if profile != nil && !models.IsStaffRole(profile.Role) {
 		client, err := h.Service.GetClientByProfileID(profile.ID)
 		if err != nil {
 			http.Error(w, "Client tidak ditemukan", http.StatusNotFound)

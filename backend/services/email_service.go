@@ -132,14 +132,11 @@ type reminderEmailData struct {
 }
 
 // renderReminderEmail merender template HTML email reminder.
+// Template di-parse satu kali saat init (lokal di <html>.Parse) agar tidak
+// diparse ulang pada setiap pengiriman.
 func renderReminderEmail(data reminderEmailData) (string, error) {
-	tmpl, err := template.New("reminder").Parse(reminderEmailHTML)
-	if err != nil {
-		return "", err
-	}
-
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
+	if err := reminderEmailTmpl.Execute(&buf, data); err != nil {
 		return "", err
 	}
 
@@ -171,10 +168,56 @@ func (s *EmailService) SendReminderEmail(
 		log.Printf("Gagal render template email reminder: %v", err)
 		// Fallback ke body plain
 		body = fmt.Sprintf(`<p>Halo %s,</p><p>Invoice <b>%s</b> sebesar <b>%s</b> jatuh tempo pada <b>%s</b>.</p><p>Status: <b>%s</b></p><p>Mohon melakukan pembayaran sebelum jatuh tempo.</p>`,
-			clientName, invoiceNumber, total, dueDate, status)
+			template.HTMLEscapeString(clientName),
+			template.HTMLEscapeString(invoiceNumber),
+			template.HTMLEscapeString(total),
+			template.HTMLEscapeString(dueDate),
+			template.HTMLEscapeString(status))
 	}
 
 	return s.Send(to, subject, body)
+}
+
+// renderHTMLEmail merender template shell email dengan data yang sudah di-escape
+// secara otomatis oleh html/template (mencegah XSS/HTML injection).
+func renderHTMLEmail(data any) (string, error) {
+	var buf bytes.Buffer
+	if err := emailShellTmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+const emailShell = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f4f4f7;padding:24px;">
+<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+{{.HeaderHTML}}
+<div style="padding:28px 32px;">
+{{.BodyHTML}}
+<p style="color:#9996a5;font-size:12px;margin:24px 0 0;">Billing Reminder System</p>
+</div>
+</div>
+</body>
+</html>`
+
+// Template email diparse satu kali saat init dan aman dieksekusi bersamaan
+// (html/template mendukung concurrent Execute).
+var (
+	reminderEmailTmpl = template.Must(template.New("reminder").Parse(reminderEmailHTML))
+	emailShellTmpl    = template.Must(template.New("email-shell").Parse(emailShell))
+)
+
+type emailShellData struct {
+	HeaderHTML template.HTML
+	BodyHTML   template.HTML
+}
+
+// dangerBanner membungkus teks dalam banner HTML (dipakai untuk alasan
+// penolakan dan overdue). Data sudah di-escape oleh pemanggil sebelum masuk sini.
+func dangerBanner(text template.HTML) template.HTML {
+	return template.HTML(`<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin:0 0 16px;"><p style="color:#dc2626;font-weight:bold;margin:0 0 4px;">Alasan:</p><p style="color:#464555;margin:0;">` + string(text) + `</p></div>`)
 }
 
 // SendInvoiceCreatedEmail mengirim email notifikasi invoice baru.
@@ -190,26 +233,35 @@ func (s *EmailService) SendInvoiceCreatedEmail(
 
 	subject := fmt.Sprintf("Tagihan Baru - Invoice %s", invoiceNumber)
 
-	body := fmt.Sprintf(`<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="font-family:Arial,sans-serif;background:#f4f4f7;padding:24px;">
-<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-<div style="background:linear-gradient(135deg,#3525cd,#5b44f3);padding:28px 32px;color:#fff;">
+	headerHTML := template.HTML(`<div style="background:linear-gradient(135deg,#3525cd,#5b44f3);padding:28px 32px;color:#fff;">
 <h2 style="margin:0;font-size:20px;">Tagihan Baru</h2>
-</div>
-<div style="padding:28px 32px;">
-<p style="color:#464555;margin:0 0 16px;">Halo <b>%s</b>,</p>
+</div>`)
+
+	bodyHTML := template.HTML(fmt.Sprintf(
+		`<p style="color:#464555;margin:0 0 16px;">Halo <b>%s</b>,</p>
 <p style="color:#464555;margin:0 0 16px;">Tagihan invoice <b>%s</b> sebesar <b>%s</b> telah dibuat.</p>
 <table style="width:100%%;border-collapse:collapse;margin:16px 0;">
 <tr><td style="padding:8px 0;color:#8b8898;">Jatuh Tempo</td><td style="padding:8px 0;font-weight:bold;color:#191c1e;">%s</td></tr>
 </table>
-<p style="color:#464555;margin:0 0 16px;">Silakan melakukan pembayaran sebelum tanggal jatuh tempo.</p>
-<p style="color:#9996a5;font-size:12px;margin:24px 0 0;">Billing Reminder System</p>
-</div>
-</div>
-</body>
-</html>`, clientName, invoiceNumber, total, dueDate)
+<p style="color:#464555;margin:0 0 16px;">Silakan melakukan pembayaran sebelum tanggal jatuh tempo.</p>`,
+		template.HTMLEscapeString(clientName),
+		template.HTMLEscapeString(invoiceNumber),
+		template.HTMLEscapeString(total),
+		template.HTMLEscapeString(dueDate),
+	))
+
+	body, err := renderHTMLEmail(emailShellData{
+		HeaderHTML: headerHTML,
+		BodyHTML:   bodyHTML,
+	})
+	if err != nil {
+		log.Printf("Gagal render email invoice baru: %v", err)
+		body = fmt.Sprintf("<p>Halo %s,</p><p>Tagihan invoice <b>%s</b> sebesar <b>%s</b> telah dibuat. Jatuh tempo <b>%s</b>.</p>",
+			template.HTMLEscapeString(clientName),
+			template.HTMLEscapeString(invoiceNumber),
+			template.HTMLEscapeString(total),
+			template.HTMLEscapeString(dueDate))
+	}
 
 	return s.Send(to, subject, body)
 }
@@ -227,23 +279,30 @@ func (s *EmailService) SendPaymentApprovedEmail(
 
 	subject := fmt.Sprintf("Pembayaran Diterima - Invoice %s", invoiceNumber)
 
-	body := fmt.Sprintf(`<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="font-family:Arial,sans-serif;background:#f4f4f7;padding:24px;">
-<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-<div style="background:linear-gradient(135deg,#0d9488,#14b8a6);padding:28px 32px;color:#fff;">
+	headerHTML := template.HTML(`<div style="background:linear-gradient(135deg,#0d9488,#14b8a6);padding:28px 32px;color:#fff;">
 <h2 style="margin:0;font-size:20px;">Pembayaran Diterima</h2>
-</div>
-<div style="padding:28px 32px;">
-<p style="color:#464555;margin:0 0 16px;">Halo <b>%s</b>,</p>
+</div>`)
+
+	bodyHTML := template.HTML(fmt.Sprintf(
+		`<p style="color:#464555;margin:0 0 16px;">Halo <b>%s</b>,</p>
 <p style="color:#464555;margin:0 0 16px;">Pembayaran untuk invoice <b>%s</b> sebesar <b>%s</b> telah berhasil diverifikasi.</p>
-<p style="color:#0d9488;font-weight:bold;margin:0 0 16px;">Status: PAID</p>
-<p style="color:#9996a5;font-size:12px;margin:24px 0 0;">Billing Reminder System</p>
-</div>
-</div>
-</body>
-</html>`, clientName, invoiceNumber, amount)
+<p style="color:#0d9488;font-weight:bold;margin:0 0 16px;">Status: PAID</p>`,
+		template.HTMLEscapeString(clientName),
+		template.HTMLEscapeString(invoiceNumber),
+		template.HTMLEscapeString(amount),
+	))
+
+	body, err := renderHTMLEmail(emailShellData{
+		HeaderHTML: headerHTML,
+		BodyHTML:   bodyHTML,
+	})
+	if err != nil {
+		log.Printf("Gagal render email pembayaran diterima: %v", err)
+		body = fmt.Sprintf("<p>Halo %s,</p><p>Pembayaran untuk invoice <b>%s</b> sebesar <b>%s</b> telah berhasil diverifikasi.</p>",
+			template.HTMLEscapeString(clientName),
+			template.HTMLEscapeString(invoiceNumber),
+			template.HTMLEscapeString(amount))
+	}
 
 	return s.Send(to, subject, body)
 }
@@ -261,30 +320,34 @@ func (s *EmailService) SendPaymentRejectedEmail(
 
 	subject := fmt.Sprintf("Pembayaran Ditolak - Invoice %s", invoiceNumber)
 
-	reasonHTML := ""
-	if strings.TrimSpace(reason) != "" {
-		reasonHTML = fmt.Sprintf(`<p style="color:#464555;margin:0 0 8px;"><b>Alasan:</b> %s</p>`, reason)
-	}
-
-	body := fmt.Sprintf(`<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="font-family:Arial,sans-serif;background:#f4f4f7;padding:24px;">
-<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-<div style="background:linear-gradient(135deg,#dc2626,#ef4444);padding:28px 32px;color:#fff;">
+	headerHTML := template.HTML(`<div style="background:linear-gradient(135deg,#dc2626,#ef4444);padding:28px 32px;color:#fff;">
 <h2 style="margin:0;font-size:20px;">Pembayaran Ditolak</h2>
-</div>
-<div style="padding:28px 32px;">
-<p style="color:#464555;margin:0 0 16px;">Halo <b>%s</b>,</p>
+</div>`)
+
+	bodyHTML := template.HTML(fmt.Sprintf(
+		`<p style="color:#464555;margin:0 0 16px;">Halo <b>%s</b>,</p>
 <p style="color:#464555;margin:0 0 16px;">Pembayaran untuk invoice <b>%s</b> sebesar <b>%s</b> belum dapat diverifikasi.</p>
 <p style="color:#dc2626;font-weight:bold;margin:0 0 16px;">Status: REJECTED</p>
 %s
-<p style="color:#464555;margin:0 0 16px;">Silakan melakukan pembayaran kembali atau menghubungi pihak terkait.</p>
-<p style="color:#9996a5;font-size:12px;margin:24px 0 0;">Billing Reminder System</p>
-</div>
-</div>
-</body>
-</html>`, clientName, invoiceNumber, amount, reasonHTML)
+<p style="color:#464555;margin:0 0 16px;">Silakan melakukan pembayaran kembali atau menghubungi pihak terkait.</p>`,
+		template.HTMLEscapeString(clientName),
+		template.HTMLEscapeString(invoiceNumber),
+		template.HTMLEscapeString(amount),
+		string(dangerBanner(template.HTML(template.HTMLEscapeString(reason)))),
+	))
+
+	body, err := renderHTMLEmail(emailShellData{
+		HeaderHTML: headerHTML,
+		BodyHTML:   bodyHTML,
+	})
+	if err != nil {
+		log.Printf("Gagal render email pembayaran ditolak: %v", err)
+		body = fmt.Sprintf("<p>Halo %s,</p><p>Pembayaran untuk invoice <b>%s</b> sebesar <b>%s</b> belum dapat diverifikasi.</p><p><b>Alasan:</b> %s</p>",
+			template.HTMLEscapeString(clientName),
+			template.HTMLEscapeString(invoiceNumber),
+			template.HTMLEscapeString(amount),
+			template.HTMLEscapeString(reason))
+	}
 
 	return s.Send(to, subject, body)
 }
@@ -302,24 +365,33 @@ func (s *EmailService) SendOverdueEmail(
 
 	subject := fmt.Sprintf("PERINGATAN: Invoice %s Melewati Jatuh Tempo", invoiceNumber)
 
-	body := fmt.Sprintf(`<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="font-family:Arial,sans-serif;background:#f4f4f7;padding:24px;">
-<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-<div style="background:linear-gradient(135deg,#dc2626,#f87171);padding:28px 32px;color:#fff;">
+	headerHTML := template.HTML(`<div style="background:linear-gradient(135deg,#dc2626,#f87171);padding:28px 32px;color:#fff;">
 <h2 style="margin:0;font-size:20px;">Tagihan Melewati Jatuh Tempo</h2>
-</div>
-<div style="padding:28px 32px;">
-<p style="color:#464555;margin:0 0 16px;">Halo <b>%s</b>,</p>
+</div>`)
+
+	bodyHTML := template.HTML(fmt.Sprintf(
+		`<p style="color:#464555;margin:0 0 16px;">Halo <b>%s</b>,</p>
 <p style="color:#464555;margin:0 0 16px;">Tagihan <b>%s</b> sebesar <b>%s</b> telah melewati tanggal jatuh tempo <b>%s</b>.</p>
 <p style="color:#dc2626;font-weight:bold;margin:0 0 16px;">Status: OVERDUE</p>
-<p style="color:#464555;margin:0 0 16px;">Silakan segera melakukan pembayaran.</p>
-<p style="color:#9996a5;font-size:12px;margin:24px 0 0;">Billing Reminder System</p>
-</div>
-</div>
-</body>
-</html>`, clientName, invoiceNumber, total, dueDate)
+<p style="color:#464555;margin:0 0 16px;">Silakan segera melakukan pembayaran.</p>`,
+		template.HTMLEscapeString(clientName),
+		template.HTMLEscapeString(invoiceNumber),
+		template.HTMLEscapeString(total),
+		template.HTMLEscapeString(dueDate),
+	))
+
+	body, err := renderHTMLEmail(emailShellData{
+		HeaderHTML: headerHTML,
+		BodyHTML:   bodyHTML,
+	})
+	if err != nil {
+		log.Printf("Gagal render email overdue: %v", err)
+		body = fmt.Sprintf("<p>Halo %s,</p><p>Tagihan <b>%s</b> sebesar <b>%s</b> telah melewati jatuh tempo <b>%s</b>.</p><p><b>Status: OVERDUE</b></p>",
+			template.HTMLEscapeString(clientName),
+			template.HTMLEscapeString(invoiceNumber),
+			template.HTMLEscapeString(total),
+			template.HTMLEscapeString(dueDate))
+	}
 
 	return s.Send(to, subject, body)
 }

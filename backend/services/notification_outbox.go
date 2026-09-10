@@ -14,6 +14,7 @@ const (
 	outboxInvoiceCreated  = "INVOICE_CREATED"
 	outboxPaymentApproved = "PAYMENT_APPROVED"
 	outboxPaymentRejected = "PAYMENT_REJECTED"
+	outboxInvoiceOverdue  = "INVOICE_OVERDUE"
 )
 
 // outboxMaxAttempts membatasi percobaan pengiriman WA pada antrian outbox.
@@ -90,6 +91,22 @@ func EnqueuePaymentRejectedWA(db *pgxpool.Pool, paymentID, reason string) {
 	}
 }
 
+// EnqueueOverdueWA menaruh job WA invoice melewati jatuh tempo ke antrian
+// outbox, sehingga pengiriman memiliki retry bila WhatsApp sempat down.
+func EnqueueOverdueWA(db *pgxpool.Pool, invoiceID string) error {
+	if strings.TrimSpace(invoiceID) == "" {
+		return nil
+	}
+	if _, err := db.Exec(context.Background(), `
+		INSERT INTO notification_outbox (notif_type, invoice_id)
+		VALUES ($1, $2)
+	`, outboxInvoiceOverdue, invoiceID); err != nil {
+		log.Printf("Gagal memasukkan outbox WA overdue %s: %v", invoiceID, err)
+		return err
+	}
+	return nil
+}
+
 // outboxRow adalah baris antrian WA yang siap diproses.
 type outboxRow struct {
 	ID        string
@@ -101,8 +118,10 @@ type outboxRow struct {
 
 // ProcessOutbox mengirim seluruh antrian notifikasi WA (invoice baru, konfirmasi
 // pembayaran) yang berstatus PENDING. Dipanggil reminderworker.exe setelah
-// RunReminderCycle. Menggunakan SELECT FOR UPDATE SKIP LOCKED dalam transaksi
-// agar baris langsung di-claim, mencegah pengiriman ganda antar worker.
+// RunReminderCycle. Baris PENDING di-claim dalam transaksi singkat (SELECT
+// FOR UPDATE SKIP LOCKED) lalu transaksi langsung ditutup, sehingga lock dan
+// koneksi DB dilepas SEBELUM I/O lambat (kirim WA + render/upload PDF) dimulai.
+// Penandaan hasil (SENT/FAILED) dilakukan per-baris dengan statement pendek.
 func (s *ReminderService) ProcessOutbox(ctx context.Context) {
 	if s.WhatsApp == nil || !s.WhatsApp.IsConnected() {
 		return
@@ -110,10 +129,9 @@ func (s *ReminderService) ProcessOutbox(ctx context.Context) {
 
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
-		log.Println("Gagal memulai transaksi outbox:", err)
+		log.Println("Gagal memulai transaksi klaim outbox:", err)
 		return
 	}
-	defer tx.Rollback(ctx)
 
 	rows, err := tx.Query(ctx, `
 		SELECT id, notif_type, COALESCE(invoice_id, ''), COALESCE(payment_id, ''), COALESCE(reason, '')
@@ -124,6 +142,7 @@ func (s *ReminderService) ProcessOutbox(ctx context.Context) {
 		FOR UPDATE SKIP LOCKED
 	`)
 	if err != nil {
+		_ = tx.Rollback(ctx)
 		log.Println("Gagal membaca antrian outbox:", err)
 		return
 	}
@@ -139,35 +158,46 @@ func (s *ReminderService) ProcessOutbox(ctx context.Context) {
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
+		_ = tx.Rollback(ctx)
 		log.Println("Gagal membaca antrian outbox:", err)
 		return
 	}
 
-	log.Printf("Outbox processing: %d antrian PENDING ditemukan.", len(pending))
+	// Klaim selesai: commit segera agar lock baris & koneksi transaksi dilepas
+	// sebelum pengiriman WA/PDF (yang lambat) di bawah.
+	if err := tx.Commit(ctx); err != nil {
+		log.Printf("Gagal menutup transaksi klaim outbox: %v", err)
+		return
+	}
+
+	log.Printf("Outbox processing: %d antrian PENDING diklaim.", len(pending))
 	if len(pending) == 0 {
-		tx.Commit(ctx)
 		return
 	}
 
 	sent := 0
 	failed := 0
 	for _, r := range pending {
+		// I/O (WA + PDF) BERJALAN DI LUAR transaksi: tidak ada lock/transaksi
+		// yang menggenggam koneksi DB selama pengiriman berlangsung.
 		if err := s.deliverOutbox(ctx, r); err != nil {
 			failed++
 			log.Printf("Outbox %s (%s) gagal: %v", r.NotifType, r.ID, err)
-			_, _ = tx.Exec(ctx, `
+			// Statement pendek (auto-commit). Guard status='PENDING' agar tidak
+			// menimpa baris yang sudah SENT oleh proses lain.
+			_, _ = s.DB.Exec(ctx, `
 				UPDATE notification_outbox
 				SET attempts = attempts + 1, error_message = $2,
 				    status = CASE WHEN attempts + 1 >= $3 THEN 'FAILED' ELSE status END
-				WHERE id = $1
+				WHERE id = $1 AND status = 'PENDING'
 			`, r.ID, err.Error(), outboxMaxAttempts)
 			continue
 		}
 
-		tag, err := tx.Exec(ctx, `
+		tag, err := s.DB.Exec(ctx, `
 			UPDATE notification_outbox
 			SET status = 'SENT', sent_at = NOW(), error_message = NULL
-			WHERE id = $1
+			WHERE id = $1 AND status = 'PENDING'
 		`, r.ID)
 		if err != nil {
 			log.Printf("Gagal menandai outbox %s sebagai SENT: %v", r.ID, err)
@@ -176,11 +206,6 @@ func (s *ReminderService) ProcessOutbox(ctx context.Context) {
 		if tag.RowsAffected() == 1 {
 			sent++
 		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		log.Printf("Gagal commit transaksi outbox: %v", err)
-		return
 	}
 
 	log.Printf("Outbox selesai: %d terkirim, %d gagal.", sent, failed)
@@ -195,6 +220,8 @@ func (s *ReminderService) deliverOutbox(ctx context.Context, r outboxRow) error 
 		return s.deliverPaymentApprovedWA(ctx, r.PaymentID)
 	case outboxPaymentRejected:
 		return s.deliverPaymentRejectedWA(ctx, r.PaymentID, r.Reason)
+	case outboxInvoiceOverdue:
+		return s.deliverOverdueWA(ctx, r.InvoiceID)
 	default:
 		return fmt.Errorf("tipe notifikasi tidak dikenal: %s", r.NotifType)
 	}
@@ -233,6 +260,23 @@ func (s *ReminderService) deliverInvoiceCreatedWA(ctx context.Context, invoiceID
 	}
 	log.Printf("Outbox invoice %s: WA PDF terkirim ke %s", inv.InvoiceNumber, inv.ClientPhone)
 
+	return nil
+}
+
+// deliverOverdueWA mengirim notifikasi invoice melewati jatuh tempo via WA.
+// Dijadwalkan lewat outbox agar ada retry bila WhatsApp sempat down.
+func (s *ReminderService) deliverOverdueWA(ctx context.Context, invoiceID string) error {
+	inv, err := getInvoiceData(ctx, s.DB, invoiceID)
+	if err != nil {
+		return fmt.Errorf("gagal ambil data invoice: %v", err)
+	}
+	if strings.TrimSpace(inv.ClientPhone) == "" {
+		return fmt.Errorf("client tidak memiliki nomor telepon")
+	}
+	if err := s.WhatsApp.Send(inv.ClientPhone, buildOverdueMessage(inv)); err != nil {
+		return fmt.Errorf("kirim WA gagal: %v", err)
+	}
+	log.Printf("Outbox invoice %s: WA overdue terkirim ke %s", inv.InvoiceNumber, inv.ClientPhone)
 	return nil
 }
 

@@ -3,6 +3,8 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -20,8 +22,10 @@ import (
 
 // WhatsAppService membungkus client whatsmeow.
 type WhatsAppService struct {
-	Client *whatsmeow.Client
-	mu     sync.Mutex
+	Client    *whatsmeow.Client
+	mu        sync.Mutex
+	connCtx   context.Context
+	cancelCtx context.CancelFunc
 }
 
 // NewWhatsAppService membuat koneksi whatsmeow.
@@ -30,9 +34,17 @@ type WhatsAppService struct {
 func NewWhatsAppService() (*WhatsAppService, error) {
 	ctx := context.Background()
 
-	container, err := sqlstore.New(ctx, "sqlite", "file:wa_sessions.db?_foreign_keys=on", nil)
+	wadbPath := os.Getenv("WA_SESSIONS_DB_PATH")
+	if strings.TrimSpace(wadbPath) == "" {
+		wadbPath = "wa_sessions.db"
+	}
+	if !strings.Contains(wadbPath, "file:") {
+		wadbPath = "file:" + wadbPath
+	}
+
+	container, err := sqlstore.New(ctx, "sqlite", wadbPath+"?_foreign_keys=on", nil)
 	if err != nil {
-		return nil, fmt.Errorf("gagal buka database sesi: %w", err)
+		return nil, fmt.Errorf("gagal buka database sesi; cek WA_SESSIONS_DB_PATH: %w", err)
 	}
 
 	device, err := container.GetFirstDevice(ctx)
@@ -44,13 +56,14 @@ func NewWhatsAppService() (*WhatsAppService, error) {
 	client := whatsmeow.NewClient(device, clientLog)
 
 	svc := &WhatsAppService{Client: client}
+	svc.connCtx, svc.cancelCtx = context.WithCancel(context.Background())
 
 	client.AddEventHandler(func(evt interface{}) {
 		switch e := evt.(type) {
 		case *events.Connected:
-			fmt.Println("WhatsApp terhubung!")
+			log.Printf("WhatsApp terhubung!")
 		case *events.LoggedOut:
-			fmt.Println("WhatsApp logout. Gunakan POST /api/whatsapp/pair untuk pairing ulang.")
+			log.Printf("WhatsApp logout. Gunakan POST /api/whatsapp/pair (auth admin) untuk pairing ulang.")
 		case *events.QR:
 			_ = e
 		}
@@ -64,7 +77,36 @@ func NewWhatsAppService() (*WhatsAppService, error) {
 		}()
 	}
 
+	go svc.keepConnected(svc.connCtx, clientLog)
+
 	return svc, nil
+}
+
+// keepConnected memantau koneksi WhatsApp dan mencoba reconnect otomatis
+// dengan interval tetap selama device masih terdaftar. Berhenti saat konteks
+// dibatalkan (Close) atau saat sesi benar-benar logout (device.ID hilang —
+// butuh pairing ulang via POST /api/whatsapp/pair).
+func (svc *WhatsAppService) keepConnected(ctx context.Context, clientLog waLog.Logger) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if svc.Client == nil || svc.Client.IsConnected() {
+				continue
+			}
+			if svc.Client.Store == nil || svc.Client.Store.ID == nil {
+				continue // sudah logout — tidak bisa reconnect, butuh pairing
+			}
+			clientLog.Infof("Koneksi WhatsApp terputus, mencoba reconnect...")
+			if err := svc.Client.Connect(); err != nil {
+				clientLog.Errorf("Gagal reconnect: %v", err)
+			}
+		}
+	}
 }
 
 // PairWithCode melakukan pairing menggunakan kode 8 digit (tanpa QR).
@@ -135,16 +177,17 @@ func (s *WhatsAppService) PairWithCode(phone string) (string, error) {
 
 // Send mengirim pesan teks ke satu nomor.
 func (s *WhatsAppService) Send(phone, message string) error {
+	// Normalisasi nomor di luar mutex: tidak menyentuh state client.
+	jid, err := normalizeJID(phone)
+	if err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.Client == nil || !s.Client.IsConnected() {
 		return fmt.Errorf("whatsapp belum terhubung")
-	}
-
-	jid, err := normalizeJID(phone)
-	if err != nil {
-		return err
 	}
 
 	_, err = s.Client.SendMessage(context.Background(), jid, &waProto.Message{
@@ -155,16 +198,17 @@ func (s *WhatsAppService) Send(phone, message string) error {
 
 // SendDocument mengirim dokumen (misalnya PDF invoice) ke satu nomor.
 func (s *WhatsAppService) SendDocument(phone, fileName string, data []byte) error {
+	// Normalisasi nomor di luar mutex: tidak menyentuh state client.
+	jid, err := normalizeJID(phone)
+	if err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.Client == nil || !s.Client.IsConnected() {
 		return fmt.Errorf("whatsapp belum terhubung")
-	}
-
-	jid, err := normalizeJID(phone)
-	if err != nil {
-		return err
 	}
 
 	ctx := context.Background()

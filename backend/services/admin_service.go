@@ -110,7 +110,7 @@ func (s *AdminService) CreateAdmin(req models.CreateAdminRequest) (*models.Admin
 	httpReq.Header.Set("apikey", serviceRoleKey)
 	httpReq.Header.Set("Authorization", "Bearer "+serviceRoleKey)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 15 * time.Second}
 
 	resp, err := client.Do(httpReq)
 	if err != nil {
@@ -286,15 +286,9 @@ func (s *AdminService) DeleteAdmin(id string) error {
 		return fmt.Errorf("SUPABASE_URL atau SUPABASE_SERVICE_KEY belum diset")
 	}
 
-	_, err := s.DB.Exec(
-		context.Background(),
-		`DELETE FROM profiles WHERE id = $1`,
-		id,
-	)
-	if err != nil {
-		return fmt.Errorf("gagal menghapus profile: %w", err)
-	}
-
+	// Hapus user dari Supabase Auth terlebih dahulu. Jika gagal, batalkan
+	// sebelum menyentuh profile lokal agar tidak ada user Supabase yang
+	// tersisa tanpa profile.
 	url := fmt.Sprintf("%s/auth/v1/admin/users/%s", supabaseURL, id)
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
@@ -304,7 +298,7 @@ func (s *AdminService) DeleteAdmin(id string) error {
 	req.Header.Set("apikey", secretKey)
 	req.Header.Set("Authorization", "Bearer "+secretKey)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -314,6 +308,16 @@ func (s *AdminService) DeleteAdmin(id string) error {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("gagal menghapus user dari Supabase Auth: status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// User Supabase sudah terhapus, baru hapus profile lokal.
+	_, err = s.DB.Exec(
+		context.Background(),
+		`DELETE FROM profiles WHERE id = $1`,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("gagal menghapus profile: %w", err)
 	}
 
 	return nil
