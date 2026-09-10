@@ -1,5 +1,5 @@
-const API_URL = "http://localhost:8080/api/invoices";
-const CLIENT_API_URL = "http://localhost:8080/api/client";
+const API_URL = import.meta.env.VITE_API_URL + "/api/invoices";
+const CLIENT_API_URL = import.meta.env.VITE_API_URL + "/api/client";
 
 function authHeaders(token, extra = {}) {
   return {

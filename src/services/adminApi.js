@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:8080/api/admins";
+const API_URL = import.meta.env.VITE_API_URL + "/api/admins";
 
 function authHeaders(token, extra = {}) {
   return {

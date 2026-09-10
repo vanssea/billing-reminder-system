@@ -1,7 +1,7 @@
 import { supabase } from "../lib/supabaseClient";
 
-const API_URL = "http://localhost:8080/api/payments";
-const CLIENT_API_URL = "http://localhost:8080/api/client";
+const API_URL = import.meta.env.VITE_API_URL + "/api/payments";
+const CLIENT_API_URL = import.meta.env.VITE_API_URL + "/api/client";
 
 const STORAGE_BUCKET = "Payment";
 

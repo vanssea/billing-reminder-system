@@ -1,74 +1,84 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import ScrollToTop from "./components/ScrollToTop";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MainLayout from "./components/layout/MainLayout";
-import ClientInvoices from "./pages/client/MyInvoices";
-import ClientPayments from "./pages/client/Payments";
-import ClientProfile from "./pages/client/Profile";
 import { AuthProvider } from "./context/AuthContext";
 
 // Auth
-import LandingPage from "./pages/auth/LandingPage";
-import Login from "./pages/auth/Login";
-import Register from "./pages/auth/Register";
-import LupaPassword from "./pages/auth/LupaPassword";
-import ResetPassword from "./pages/auth/ResetPassword";
+const LandingPage = lazy(() => import("./pages/auth/LandingPage"));
+const Login = lazy(() => import("./pages/auth/Login"));
+const Register = lazy(() => import("./pages/auth/Register"));
+const LupaPassword = lazy(() => import("./pages/auth/LupaPassword"));
+const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
 
 // Client
-import ClientDashboard from "./pages/client/Dashboard";
-import ClientProducts from "./pages/client/Products";
-import InvoiceDetail from "./pages/client/InvoiceDetail";
+const ClientDashboard = lazy(() => import("./pages/client/Dashboard"));
+const ClientInvoices = lazy(() => import("./pages/client/MyInvoices"));
+const ClientPayments = lazy(() => import("./pages/client/Payments"));
+const ClientProducts = lazy(() => import("./pages/client/Products"));
+const InvoiceDetail = lazy(() => import("./pages/client/InvoiceDetail"));
+const ClientProfile = lazy(() => import("./pages/client/Profile"));
 
 // Admin
-import AdminDashboard from "./pages/admin/Dashboard";
-import AdminClients from "./pages/admin/Clients";
-import AdminProducts from "./pages/admin/Products";
-import AdminInvoices from "./pages/admin/Invoices";
-import AdminPayments from "./pages/admin/Payments";
-import AdminReminders from "./pages/admin/Reminders";
-import AdminPurchases from "./pages/admin/Purchases";
-import AdminReports from "./pages/admin/Reports";
-import AdminProfile from "./pages/admin/Profile";
+const AdminDashboard = lazy(() => import("./pages/admin/Dashboard"));
+const AdminClients = lazy(() => import("./pages/admin/Clients"));
+const AdminProducts = lazy(() => import("./pages/admin/Products"));
+const AdminInvoices = lazy(() => import("./pages/admin/Invoices"));
+const AdminPayments = lazy(() => import("./pages/admin/Payments"));
+const AdminReminders = lazy(() => import("./pages/admin/Reminders"));
+const AdminPurchases = lazy(() => import("./pages/admin/Purchases"));
+const AdminReports = lazy(() => import("./pages/admin/Reports"));
+const AdminProfile = lazy(() => import("./pages/admin/Profile"));
 
 // Super Admin
-import SuperAdminDashboard from "./pages/superadmin/Dashboard";
-import AdminManagement from "./pages/superadmin/AdminManagement";
-import ClientManagement from "./pages/superadmin/ClientManagement";
-import ProductManagement from "./pages/superadmin/ProductManagement";
-import PurchaseManagement from "./pages/superadmin/PurchaseManagement";
-import InvoiceManagement from "./pages/superadmin/InvoiceManagement";
-import ReminderManagement from "./pages/superadmin/ReminderManagement";
-import PaymentManagement from "./pages/superadmin/PaymentManagement";
-import Reports from "./pages/superadmin/Reports";
-import Settings from "./pages/superadmin/Settings";
+const SuperAdminDashboard = lazy(() => import("./pages/superadmin/Dashboard"));
+const AdminManagement = lazy(() => import("./pages/superadmin/AdminManagement"));
+const ClientManagement = lazy(() => import("./pages/superadmin/ClientManagement"));
+const ProductManagement = lazy(() => import("./pages/superadmin/ProductManagement"));
+const PurchaseManagement = lazy(() => import("./pages/superadmin/PurchaseManagement"));
+const InvoiceManagement = lazy(() => import("./pages/superadmin/InvoiceManagement"));
+const ReminderManagement = lazy(() => import("./pages/superadmin/ReminderManagement"));
+const PaymentManagement = lazy(() => import("./pages/superadmin/PaymentManagement"));
+const Reports = lazy(() => import("./pages/superadmin/Reports"));
+const Settings = lazy(() => import("./pages/superadmin/Settings"));
 
 // Static Pages
-import TentangKami from "./pages/static/TentangKami";
-import Blog from "./pages/static/Blog";
-import Karir from "./pages/static/Karir";
-import Kontak from "./pages/static/Kontak";
-import Integrasi from "./pages/static/Integrasi";
-import Changelog from "./pages/static/Changelog";
-import StatusSistem from "./pages/static/StatusSistem";
-import PusatBantuan from "./pages/static/PusatBantuan";
-import Dokumentasi from "./pages/static/Dokumentasi";
-import PanduanAPI from "./pages/static/PanduanAPI";
-import Komunitas from "./pages/static/Komunitas";
-import KebijakanPrivasi from "./pages/static/KebijakanPrivasi";
-import SyaratKetentuan from "./pages/static/SyaratKetentuan";
+const TentangKami = lazy(() => import("./pages/static/TentangKami"));
+const Blog = lazy(() => import("./pages/static/Blog"));
+const Karir = lazy(() => import("./pages/static/Karir"));
+const Kontak = lazy(() => import("./pages/static/Kontak"));
+const Integrasi = lazy(() => import("./pages/static/Integrasi"));
+const Changelog = lazy(() => import("./pages/static/Changelog"));
+const StatusSistem = lazy(() => import("./pages/static/StatusSistem"));
+const PusatBantuan = lazy(() => import("./pages/static/PusatBantuan"));
+const Dokumentasi = lazy(() => import("./pages/static/Dokumentasi"));
+const PanduanAPI = lazy(() => import("./pages/static/PanduanAPI"));
+const Komunitas = lazy(() => import("./pages/static/Komunitas"));
+const KebijakanPrivasi = lazy(() => import("./pages/static/KebijakanPrivasi"));
+const SyaratKetentuan = lazy(() => import("./pages/static/SyaratKetentuan"));
+
+function PageFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50">
+      <p className="text-sm font-medium text-slate-500">Memuat...</p>
+    </div>
+  );
+}
 
 function App() {
   return (
     <AuthProvider>
       <ScrollToTop />
 
-      <Routes>
-        {/* ==================== AUTH ==================== */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/lupa-password" element={<LupaPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
+      <Suspense fallback={<PageFallback />}>
+        <Routes>
+          {/* ==================== AUTH ==================== */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/lupa-password" element={<LupaPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* ==================== LANDING ==================== */}
         <Route path="/" element={<LandingPage />} />
@@ -286,7 +296,8 @@ function App() {
 
         {/* ==================== FALLBACK ==================== */}
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+        </Routes>
+      </Suspense>
     </AuthProvider>
   );
 }

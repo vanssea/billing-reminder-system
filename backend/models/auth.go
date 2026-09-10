@@ -8,6 +8,14 @@ const (
 	RoleClient     = "CLIENT"
 )
 
+// IsStaffRole mengembalikan true untuk role staf (ADMIN/SUPERADMIN).
+// Sumber kebenaran role adalah database; semua role lain (CLIENT maupun role
+// tidak dikenal/NULL) dianggap non-staf sehingga harus melewati ownership check
+// di handler agar tidak bisa mengakses data milik pengguna lain.
+func IsStaffRole(role string) bool {
+	return role == RoleAdmin || role == RoleSuperadmin
+}
+
 type AuthUser struct {
 	ID       string `json:"id"`
 	Email    string `json:"email"`

@@ -247,32 +247,11 @@ func (s *ReminderService) processOverdueInvoices(ctx context.Context) {
 			continue
 		}
 
-		// Kirim via WhatsApp
+		// Kirim via WhatsApp — dijadwalkan lewat outbox agar ada retry
+		// bila WhatsApp sempat down (bukan kirim langsung).
 		if whatsappReady(s.WhatsApp) && strings.TrimSpace(r.Phone) != "" {
-			message := fmt.Sprintf(`⏰ *Tagihan Melewati Jatuh Tempo*
-
-Halo, *%s*,
-
-Tagihan *%s*
-sebesar *Rp %s*
-telah melewati tanggal jatuh tempo *%s*.
-
-Status: *OVERDUE*
-
-Silakan segera melakukan pembayaran.
-
-Terima kasih.
-*Billing Reminder*`,
-				inv.ClientCompany,
-				inv.InvoiceNumber,
-				formatRupiah(inv.Total),
-				formatTanggalIndo(inv.DueDate),
-			)
-
-			if err := s.WhatsApp.Send(r.Phone, message); err != nil {
-				log.Printf("Overdue WhatsApp gagal terkirim untuk %s ke %s: %v", inv.InvoiceNumber, r.Phone, err)
-			} else {
-				log.Printf("Overdue WhatsApp terkirim untuk %s ke %s", inv.InvoiceNumber, r.Phone)
+			if err := EnqueueOverdueWA(s.DB, r.ID); err != nil {
+				log.Printf("Overdue WA gagal dijadwalkan untuk %s: %v", r.ID, err)
 			}
 		}
 
@@ -291,6 +270,30 @@ Terima kasih.
 			}
 		}
 	}
+}
+
+// buildOverdueMessage menyusun isi pesan WhatsApp invoice melewati jatuh tempo.
+// Dipakai oleh reminder worker melalui antrian outbox.
+func buildOverdueMessage(inv *InvoiceData) string {
+	return fmt.Sprintf(`⏰ *Tagihan Melewati Jatuh Tempo*
+
+Halo, *%s*,
+
+Tagihan *%s*
+sebesar *Rp %s*
+telah melewati tanggal jatuh tempo *%s*.
+
+Status: *OVERDUE*
+
+Silakan segera melakukan pembayaran.
+
+Terima kasih.
+*Billing Reminder*`,
+		inv.ClientCompany,
+		inv.InvoiceNumber,
+		formatRupiah(inv.Total),
+		formatTanggalIndo(inv.DueDate),
+	)
 }
 
 // buildInvoiceCreatedMessage menyusun isi pesan WhatsApp tagihan baru.

@@ -1,5 +1,5 @@
-const API_URL = "http://localhost:8080/api/admin/purchase-requests";
-const CLIENT_API_URL = "http://localhost:8080/api/client/purchase";
+const API_URL = import.meta.env.VITE_API_URL + "/api/admin/purchase-requests";
+const CLIENT_API_URL = import.meta.env.VITE_API_URL + "/api/client/purchase";
 
 function authHeaders(token, extra = {}) {
   return {

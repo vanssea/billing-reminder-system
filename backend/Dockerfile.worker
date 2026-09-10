@@ -1,0 +1,18 @@
+FROM golang:1.26-alpine AS builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o reminderworker.exe ./cmd/reminderworker/
+
+FROM alpine:3.19
+# chromium dibutuhkan untuk render PDF invoice pada worker (H-1/overdue).
+# ca-certificates dan tzdata dipasang agar binary Go & browser berjalan.
+RUN apk add --no-cache ca-certificates tzdata chromium
+ENV TZ=Asia/Jakarta
+ENV CHROME_PATH=/usr/bin/chromium
+WORKDIR /app
+COPY --from=builder /app/reminderworker.exe .
+# Template PDF dibutuhkan worker untuk rendering invoice.
+COPY --from=builder /app/templates ./templates
+CMD ["./reminderworker.exe"]

@@ -183,15 +183,17 @@ func (s *ReminderService) processReminder(ctx context.Context, r dueReminderRow,
 	// 1. Kirim via WhatsApp
 	if r.ReminderType == "H-1" {
 		pdfBytes, err := s.PDF.RenderInvoicePDF(inv)
-		if err == nil {
+		if err != nil {
+			// PDF adalah bagian wajib pengiriman H-1: kegagalan tidak boleh
+			// dianggap sukses, dicatat agar status reminder menjadi FAILED.
+			errs = append(errs, fmt.Sprintf("PDF: %v", err))
+		} else {
 			fileName := "Invoice-" + strings.ReplaceAll(inv.InvoiceNumber, "/", "-") + ".pdf"
 			if err := s.WhatsApp.SendDocument(r.Phone, fileName, pdfBytes); err != nil {
-				log.Printf("Reminder H-1: kirim PDF WA gagal: %v", err)
+				errs = append(errs, fmt.Sprintf("PDF WhatsApp: %v", err))
 			} else {
 				log.Printf("Reminder H-1: PDF WA terkirim ke %s", r.Phone)
 			}
-		} else {
-			log.Printf("Reminder H-1: gagal generate PDF: %v", err)
 		}
 	}
 

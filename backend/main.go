@@ -5,6 +5,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"strings"
+	"syscall"
 	"time"
 
 	"billing-reminder-system/config"
@@ -17,11 +20,25 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// panicRecovery adalah middleware yang menangkap panic di handler agar server
+// tidak crash seluruhnya. Panic dicatat ke log dan dikembalikan 500.
+func panicRecovery(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				log.Printf("PANIC RECOVERED: %v | %s %s", rec, r.Method, r.URL.Path)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
-	// Membaca file .env
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Gagal membaca file .env")
+	// Membaca file .env — log warning jika gagal (bukan fatal agar container
+	// tetap berjalan saat env diinjeksi via orchestrator/Railway).
+	if err := godotenv.Load(); err != nil {
+		log.Println("Peringatan: .env tidak ditemukan, menggunakan variabel env sistem")
 	}
 
 	// Koneksi ke database Supabase
@@ -91,12 +108,18 @@ func main() {
 	// Setup router
 	router := chi.NewRouter()
 
-	// CORS
+	// Panic recovery — SELALU di awal sebelum middleware lain
+	router.Use(panicRecovery)
+
+	// CORS — baca allowed origins dari env var, fallback ke localhost untuk dev
+	corsOrigins := os.Getenv("CORS_ORIGINS")
+	if corsOrigins == "" {
+		corsOrigins = "http://localhost:5173,http://127.0.0.1:5173"
+	}
+	allowedOrigins := strings.Split(corsOrigins, ",")
+
 	router.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{
-			"http://localhost:5173",
-			"http://127.0.0.1:5173",
-		},
+		AllowedOrigins:   allowedOrigins,
 		AllowedMethods: []string{
 			"GET",
 			"POST",
@@ -142,9 +165,15 @@ func main() {
 	// Menjalankan watcher notifikasi invoice overdue untuk lonceng admin
 	go appNotificationService.StartOverdueWatcher(context.Background())
 
+	// Port — baca dari env var, fallback ke 8080
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
 	// Menjalankan server
 	server := &http.Server{
-		Addr:         ":8080",
+		Addr:         ":" + port,
 		Handler:      router,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 120 * time.Second, // render PDF + upload WhatsApp bisa lama
@@ -153,22 +182,26 @@ func main() {
 
 	log.Println("=================================")
 	log.Println("Backend Billing Reminder berjalan!")
-	log.Println("Server: http://localhost:8080")
-	log.Println("API Clients: http://localhost:8080/api/clients")
-	log.Println("API Admins: http://localhost:8080/api/admins")
-	log.Println("API Products: http://localhost:8080/api/products")
-	log.Println("API Testimonials: http://localhost:8080/api/testimonials")
-	log.Println("API FAQs: http://localhost:8080/api/faqs")
-	log.Println("API Auth: http://localhost:8080/api/auth/me")
-	log.Println("API Invoices: http://localhost:8080/api/invoices")
-	log.Println("API Reminders: http://localhost:8080/api/reminders")
-	log.Println("API Payments: http://localhost:8080/api/payments")
-	log.Println("API Notifications: http://localhost:8080/api/notifications")
-	log.Println("API Settings: http://localhost:8080/api/admin/settings")
+	log.Printf("Server: http://localhost:%s", port)
 	log.Println("=================================")
 
-	err = server.ListenAndServe()
-	if err != nil && err != http.ErrServerClosed {
+	// Graceful shutdown — tangkap SIGINT/SIGTERM untuk shutdown yang bersih
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		sig := <-sigCh
+		log.Printf("Signal %v diterima, melakukan graceful shutdown...", sig)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			log.Printf("Graceful shutdown error: %v", err)
+		}
+	}()
+
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal("Server error:", err)
 	}
+
+	log.Println("Server berhenti dengan bersih.")
 }

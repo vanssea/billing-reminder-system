@@ -1,5 +1,5 @@
-const API_URL = "http://localhost:8080/api/admin/dashboard";
-const SUPER_ADMIN_URL = "http://localhost:8080/api/super-admin/dashboard";
+const API_URL = import.meta.env.VITE_API_URL + "/api/admin/dashboard";
+const SUPER_ADMIN_URL = import.meta.env.VITE_API_URL + "/api/super-admin/dashboard";
 
 export const getDashboardSummary = async (token) => {
   const response = await fetch(API_URL, {

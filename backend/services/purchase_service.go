@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"billing-reminder-system/models"
@@ -254,11 +255,13 @@ func (s *PurchaseService) UpdatePurchaseRequestStatus(id, status string, adminNo
 	}
 	defer tx.Rollback(context.Background())
 
+	var createdInvoice *models.Invoice
+
 	var purchaseReq models.PurchaseRequestModel
 	err = tx.QueryRow(context.Background(), `
 		UPDATE purchase_requests
 		SET status = $1, admin_notes = $2, updated_at = now()
-		WHERE id = $3
+		WHERE id = $3 AND status = 'PENDING'
 		RETURNING id, client_id, profile_id, product_id, product_name, billing_cycle, amount, status, admin_notes, created_at, updated_at
 	`, status, adminNotes, id).Scan(
 		&purchaseReq.ID,
@@ -274,6 +277,9 @@ func (s *PurchaseService) UpdatePurchaseRequestStatus(id, status string, adminNo
 		&purchaseReq.UpdatedAt,
 	)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("hanya request yang masih PENDING yang bisa diproses")
+		}
 		return nil, err
 	}
 
@@ -307,7 +313,7 @@ func (s *PurchaseService) UpdatePurchaseRequestStatus(id, status string, adminNo
 			},
 		}
 
-		_, err = s.InvoiceService.CreateInvoice(createReq)
+		createdInvoice, err = s.InvoiceService.CreateInvoiceInTx(context.Background(), tx, createReq)
 		if err != nil {
 			return nil, fmt.Errorf("purchase disetujui tetapi gagal membuat invoice: %w", err)
 		}
@@ -315,6 +321,12 @@ func (s *PurchaseService) UpdatePurchaseRequestStatus(id, status string, adminNo
 
 	if err = tx.Commit(context.Background()); err != nil {
 		return nil, err
+	}
+
+	if createdInvoice != nil {
+		if _, ferr := s.InvoiceService.FinalizeInvoiceCreated(createdInvoice); ferr != nil {
+			log.Printf("Invoice %s dibuat tetapi detail tidak terisi penuh: %v", createdInvoice.InvoiceNumber, ferr)
+		}
 	}
 
 	notes := ""
