@@ -127,14 +127,6 @@ export default function InvoiceDetail() {
     }
   }, [data]);
 
-  // Dukungan tombol "Download PDF" dari halaman daftar (MyInvoices): saat
-  // diarahkan ke sini dengan state.pdf, unduh PDF begitu data tersedia.
-  useEffect(() => {
-    if (location.state?.pdf && data?.invoice && !downloading) {
-      handleDownloadPDF();
-    }
-  }, [location.state, data, downloading, handleDownloadPDF]);
-
   if (loading) {
     return (
       <div>

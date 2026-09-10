@@ -95,8 +95,16 @@ func main() {
 
 	// Kirim notifikasi WA yang dijadwalkan backend lewat tabel outbox
 	// (invoice baru, pembayaran disetujui/ditolak).
+	// Dilindungi advisory lock terpisah agar dua worker overlap tidak mengirim
+	// outbox yang sama dua kali.
 	logInfo("Outbox processing started")
-	reminderService.ProcessOutbox(context.Background())
+	outboxRelease, outboxLocked := reminderService.TryAcquireOutboxLock(context.Background())
+	if outboxLocked {
+		reminderService.ProcessOutbox(context.Background())
+		outboxRelease()
+	} else {
+		logInfo("Outbox dilewati: proses lain memegang lock outbox.")
+	}
 
 	if waService != nil {
 		waService.Close()

@@ -19,6 +19,34 @@ const (
 // outboxMaxAttempts membatasi percobaan pengiriman WA pada antrian outbox.
 const outboxMaxAttempts = 3
 
+// outboxAdvisoryLockID adalah ID lock PostgreSQL terpisah untuk melindungi
+// proses outbox agar tidak ada dua worker yang mengirim outbox yang sama.
+const outboxAdvisoryLockID = 72420102
+
+// TryAcquireOutboxLock mencoba mengambil advisory lock untuk outbox tanpa
+// memblokir. Mengembalikan fungsi release beserta status keberhasilan.
+func (s *ReminderService) TryAcquireOutboxLock(ctx context.Context) (release func(), ok bool) {
+	conn, err := s.DB.Acquire(ctx)
+	if err != nil {
+		log.Printf("Gagal ambil koneksi untuk lock outbox: %v", err)
+		return nil, false
+	}
+	var locked bool
+	if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", outboxAdvisoryLockID).Scan(&locked); err != nil {
+		conn.Release()
+		log.Printf("Gagal mengunci outbox lock: %v", err)
+		return nil, false
+	}
+	if !locked {
+		conn.Release()
+		return nil, false
+	}
+	return func() {
+		conn.Exec(ctx, "SELECT pg_advisory_unlock($1)", outboxAdvisoryLockID)
+		conn.Release()
+	}, true
+}
+
 // EnqueueInvoiceCreatedWA menaruh job WA "Tagihan Baru" ke antrian outbox and
 // mengembalikan error jika pemasukan antrian gagal.
 func EnqueueInvoiceCreatedWA(db *pgxpool.Pool, invoiceID string) error {
@@ -73,19 +101,27 @@ type outboxRow struct {
 
 // ProcessOutbox mengirim seluruh antrian notifikasi WA (invoice baru, konfirmasi
 // pembayaran) yang berstatus PENDING. Dipanggil reminderworker.exe setelah
-// RunReminderCycle. Setiap baris diperbarui dengan guard status agar tidak ada
-// pengiriman ganda meski dua worker tumpang tindih.
+// RunReminderCycle. Menggunakan SELECT FOR UPDATE SKIP LOCKED dalam transaksi
+// agar baris langsung di-claim, mencegah pengiriman ganda antar worker.
 func (s *ReminderService) ProcessOutbox(ctx context.Context) {
 	if s.WhatsApp == nil || !s.WhatsApp.IsConnected() {
 		return
 	}
 
-	rows, err := s.DB.Query(ctx, `
+	tx, err := s.DB.Begin(ctx)
+	if err != nil {
+		log.Println("Gagal memulai transaksi outbox:", err)
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	rows, err := tx.Query(ctx, `
 		SELECT id, notif_type, COALESCE(invoice_id, ''), COALESCE(payment_id, ''), COALESCE(reason, '')
 		FROM notification_outbox
 		WHERE status = 'PENDING'
 		ORDER BY created_at
 		LIMIT 50
+		FOR UPDATE SKIP LOCKED
 	`)
 	if err != nil {
 		log.Println("Gagal membaca antrian outbox:", err)
@@ -109,6 +145,7 @@ func (s *ReminderService) ProcessOutbox(ctx context.Context) {
 
 	log.Printf("Outbox processing: %d antrian PENDING ditemukan.", len(pending))
 	if len(pending) == 0 {
+		tx.Commit(ctx)
 		return
 	}
 
@@ -118,7 +155,7 @@ func (s *ReminderService) ProcessOutbox(ctx context.Context) {
 		if err := s.deliverOutbox(ctx, r); err != nil {
 			failed++
 			log.Printf("Outbox %s (%s) gagal: %v", r.NotifType, r.ID, err)
-			_, _ = s.DB.Exec(ctx, `
+			_, _ = tx.Exec(ctx, `
 				UPDATE notification_outbox
 				SET attempts = attempts + 1, error_message = $2,
 				    status = CASE WHEN attempts + 1 >= $3 THEN 'FAILED' ELSE status END
@@ -127,10 +164,10 @@ func (s *ReminderService) ProcessOutbox(ctx context.Context) {
 			continue
 		}
 
-		tag, err := s.DB.Exec(ctx, `
+		tag, err := tx.Exec(ctx, `
 			UPDATE notification_outbox
 			SET status = 'SENT', sent_at = NOW(), error_message = NULL
-			WHERE id = $1 AND status = 'PENDING'
+			WHERE id = $1
 		`, r.ID)
 		if err != nil {
 			log.Printf("Gagal menandai outbox %s sebagai SENT: %v", r.ID, err)
@@ -138,9 +175,12 @@ func (s *ReminderService) ProcessOutbox(ctx context.Context) {
 		}
 		if tag.RowsAffected() == 1 {
 			sent++
-		} else {
-			log.Printf("Outbox %s sudah diproses proses lain; dilewati.", r.ID)
 		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		log.Printf("Gagal commit transaksi outbox: %v", err)
+		return
 	}
 
 	log.Printf("Outbox selesai: %d terkirim, %d gagal.", sent, failed)

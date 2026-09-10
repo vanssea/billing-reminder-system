@@ -275,7 +275,7 @@ export default function ClientPayments() {
       setOpen(false);
       setForm(emptyForm);
       setBanner(
-        `Bukti pembayaran untuk ${form.invoiceId} berhasil diupload. Status: Menunggu verifikasi admin.`
+        `Bukti pembayaran untuk ${selectedInvoice?.invoice_number || form.invoiceId} berhasil diupload. Status: Menunggu verifikasi admin.`
       );
       const payData = await getClientPayments(accessToken);
       setPayments(payData || []);
