@@ -30,7 +30,7 @@ function getInvoiceTotal(invoice) {
 
 export default function ClientInvoices() {
   const navigate = useNavigate();
-  const { client, accessToken } = useAuth();
+  const { client, accessToken, loading: authLoading } = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -41,7 +41,7 @@ export default function ClientInvoices() {
   const [toDate, setToDate] = useState("");
 
   useEffect(() => {
-    if (!client || !accessToken) return;
+    if (authLoading || !accessToken || !client) return;
 
     const fetchData = async () => {
       try {
@@ -60,7 +60,7 @@ export default function ClientInvoices() {
     };
 
     fetchData();
-  }, [client, accessToken]);
+  }, [client, accessToken, authLoading]);
 
   const sortedInvoices = [...invoices].sort((a, b) =>
     a.invoice_date < b.invoice_date ? 1 : -1
@@ -91,7 +91,11 @@ export default function ClientInvoices() {
       ? sortedInvoices.length
       : sortedInvoices.filter((invoice) => invoice.status === filter).length;
 
-  if (loading) {
+  // Akun baru belum punya baris clients: jangan spinner selamanya,
+  // tampilkan halaman + CTA lengkapi profil.
+  const needsProfile = !authLoading && !!accessToken && !client;
+
+  if (loading && !needsProfile) {
     return (
       <div>
         <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">

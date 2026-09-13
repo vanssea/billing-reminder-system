@@ -19,6 +19,7 @@ import ResetPassword from "./pages/auth/ResetPassword";
 import ClientDashboard from "./pages/client/Dashboard";
 import ClientProducts from "./pages/client/Products";
 import InvoiceDetail from "./pages/client/InvoiceDetail";
+import ClientTestimonials from "./pages/client/Testimonials";
 
 // Admin
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -87,6 +88,7 @@ function App() {
           <Route path="invoices/:id" element={<InvoiceDetail />} />
           <Route path="payments" element={<ClientPayments />} />
           <Route path="products" element={<ClientProducts />} />
+          <Route path="testimonials" element={<ClientTestimonials />} />
           <Route path="profile" element={<ClientProfile />} />
         </Route>
 

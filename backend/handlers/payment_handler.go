@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -35,12 +36,14 @@ func (h *PaymentHandler) GetPaymentsByClientID(w http.ResponseWriter, r *http.Re
 
 	client, err := h.Service.GetClientByProfileID(profile.ID)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			http.Error(w, "Client tidak ditemukan", http.StatusNotFound)
-		} else {
-			log.Printf("GetPaymentsByClientID: gagal memverifikasi client %s: %v", profile.ID, err)
-			http.Error(w, "Gagal memverifikasi client", http.StatusInternalServerError)
+		// Akun baru belum punya baris clients: balas daftar kosong, bukan 404.
+		if errors.Is(err, pgx.ErrNoRows) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode([]models.Payment{})
+			return
 		}
+		log.Printf("GetPaymentsByClientID: gagal memverifikasi client %s: %v", profile.ID, err)
+		http.Error(w, "Gagal memverifikasi client", http.StatusInternalServerError)
 		return
 	}
 
