@@ -64,6 +64,16 @@ func formatTanggalIndo(t time.Time) string {
 	return fmt.Sprintf("%d %s %d", t.Day(), bulanIndonesia[t.Month()], t.Year())
 }
 
+// parseDateFlexible mem-parsing tanggal baik format RFC3339 (mis. dari
+// toISOString Frontend) maupun YYYY-MM-DD. Dipakai agar backend toleran
+// terhadap kedua format sehingga tanggal tidak bergeser/patah.
+func parseDateFlexible(s string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, nil
+	}
+	return time.Parse("2006-01-02", s)
+}
+
 // formatRupiah memformat angka menjadi "1.250.000,00".
 func formatRupiah(total float64) string {
 	parts := strings.Split(fmt.Sprintf("%.2f", total), ".")
@@ -150,7 +160,8 @@ func findBrowserPath() string {
 // newAllocatorContext membuat context allocator chromedp dengan browser
 // yang terdeteksi di sistem. UserDataDir dipisahkan agar tidak bentrok
 // dengan jendela Chrome yang sedang terbuka.
-func newAllocatorContext() (context.Context, context.CancelFunc) {
+// Direktori profil dikembalikan agar pemanggil dapat membersihkannya.
+func newAllocatorContext() (context.Context, context.CancelFunc, string) {
 	tmpDir, _ := os.MkdirTemp("", "chromedp-profile-*")
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.Flag("disable-gpu", true),
@@ -161,7 +172,8 @@ func newAllocatorContext() (context.Context, context.CancelFunc) {
 	if p := findBrowserPath(); p != "" {
 		opts = append(opts, chromedp.ExecPath(p))
 	}
-	return chromedp.NewExecAllocator(context.Background(), opts...)
+	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
+	return allocCtx, cancel, tmpDir
 }
 
 // RenderInvoicePDF merender satu invoice menjadi PDF (A4) dan
@@ -192,8 +204,11 @@ func (p *PDFService) RenderInvoicePDF(d *InvoiceData) ([]byte, error) {
 
 	fileURL := "file:///" + filepath.ToSlash(tmpName)
 
-	allocCtx, allocCancel := newAllocatorContext()
+	allocCtx, allocCancel, tmpDir := newAllocatorContext()
+	// Bersihkan direktori profil browser. Order penting: allocCancel dulu
+	// (proses browser berhenti), lalu hapus direktori.
 	defer allocCancel()
+	defer os.RemoveAll(tmpDir)
 
 	ctx, cancel := chromedp.NewContext(allocCtx)
 	defer cancel()

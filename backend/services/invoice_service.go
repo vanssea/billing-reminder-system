@@ -9,6 +9,7 @@ import (
 
 	"billing-reminder-system/models"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -16,6 +17,7 @@ type InvoiceService struct {
 	DB            *pgxpool.Pool
 	ClientService *ClientService
 	WhatsApp      *WhatsAppService
+	Email         *EmailService
 	PDF           *PDFService
 }
 
@@ -85,62 +87,20 @@ func (s *InvoiceService) GetInvoicesByClientID(clientID string) ([]models.Invoic
 			return nil, err
 		}
 
-		// =========================
-		// ITEMS
-		// =========================
-
-		invoice.Items, err = s.fetchItems(invoice.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		if invoice.Items == nil {
-			invoice.Items = []models.InvoiceItem{}
-		}
-
-		// =========================
-		// PAYMENTS
-		// =========================
-
-		invoice.Payments, err = s.fetchPayments(invoice.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		if invoice.Payments == nil {
-			invoice.Payments = []models.Payment{}
-		}
-
-		// =========================
-		// REMINDERS
-		// =========================
-
-		invoice.Reminders, err = s.fetchReminders(invoice.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		if invoice.Reminders == nil {
-			invoice.Reminders = []models.Reminder{}
-		}
-
-		// =========================
-		// ACTIVITY LOGS
-		// =========================
-
-		invoice.ActivityLogs, err = s.fetchActivityLogs(invoice.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		if invoice.ActivityLogs == nil {
-			invoice.ActivityLogs = []models.ActivityLog{}
-		}
-
 		invoices = append(invoices, invoice)
 	}
 
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Muat relasi (items/payments/reminders/activity logs) untuk seluruh
+	// invoice sekaligus agar tidak ada N+1 query.
+	idMap := make(map[string]*models.Invoice, len(invoices))
+	for i := range invoices {
+		idMap[invoices[i].ID] = &invoices[i]
+	}
+	if err := s.batchLoadRelations(idMap); err != nil {
 		return nil, err
 	}
 
@@ -362,6 +322,215 @@ func (s *InvoiceService) fetchActivityLogs(invoiceID string) ([]models.ActivityL
 	return logs, nil
 }
 
+// batchLoadRelations memuat items, payments, reminders, dan activity logs
+// untuk banyak invoice sekaligus (satu query per tipe relasi) guna menghindari
+// N+1 query saat menampilkan daftar invoice.
+// Invoice yang tidak memiliki relasi tetap diberi slice kosong agar output
+// JSON konsisten dengan perilaku sebelumnya.
+func (s *InvoiceService) batchLoadRelations(invoices map[string]*models.Invoice) error {
+	ids := make([]string, 0, len(invoices))
+	for id := range invoices {
+		ids = append(ids, id)
+	}
+
+	// ITEMS
+	rows, err := s.DB.Query(context.Background(), `
+		SELECT
+			ii.id,
+			ii.invoice_id,
+			ii.product_id,
+			p.name,
+			ii.quantity,
+			ii.price,
+			ii.subtotal,
+			ii.billing_cycle
+		FROM invoice_items ii
+		JOIN products p ON p.id = ii.product_id
+		WHERE ii.invoice_id = ANY($1)
+		ORDER BY ii.created_at ASC
+	`, ids)
+	if err != nil {
+		return err
+	}
+
+	for rows.Next() {
+		var it models.InvoiceItem
+		if err := rows.Scan(
+			&it.ID,
+			&it.InvoiceID,
+			&it.ProductID,
+			&it.ProductName,
+			&it.Quantity,
+			&it.Price,
+			&it.Subtotal,
+			&it.BillingCycle,
+		); err != nil {
+			rows.Close()
+			return err
+		}
+		if inv, ok := invoices[it.InvoiceID]; ok {
+			inv.Items = append(inv.Items, it)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+
+	// PAYMENTS
+	rows, err = s.DB.Query(context.Background(), `
+		SELECT
+			id,
+			invoice_id,
+			amount,
+			COALESCE(payment_date, created_at) AS payment_date,
+			COALESCE(payment_method, '') AS payment_method,
+			COALESCE(proof_url, '') AS proof_url,
+			status,
+			verified_by,
+			verified_at,
+			COALESCE(notes, '') AS notes,
+			created_at,
+			updated_at
+		FROM payments
+		WHERE invoice_id = ANY($1)
+		ORDER BY created_at DESC
+	`, ids)
+	if err != nil {
+		return err
+	}
+
+	for rows.Next() {
+		var p models.Payment
+		if err := rows.Scan(
+			&p.ID,
+			&p.InvoiceID,
+			&p.Amount,
+			&p.PaymentDate,
+			&p.PaymentMethod,
+			&p.ProofURL,
+			&p.Status,
+			&p.VerifiedBy,
+			&p.VerifiedAt,
+			&p.Notes,
+			&p.CreatedAt,
+			&p.UpdatedAt,
+		); err != nil {
+			rows.Close()
+			return err
+		}
+		if inv, ok := invoices[p.InvoiceID]; ok {
+			inv.Payments = append(inv.Payments, p)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+
+	// REMINDERS
+	rows, err = s.DB.Query(context.Background(), `
+		SELECT
+			id,
+			invoice_id,
+			reminder_type,
+			scheduled_at,
+			sent_at,
+			status,
+			created_at
+		FROM reminders
+		WHERE invoice_id = ANY($1)
+		ORDER BY scheduled_at ASC
+	`, ids)
+	if err != nil {
+		return err
+	}
+
+	for rows.Next() {
+		var r models.Reminder
+		if err := rows.Scan(
+			&r.ID,
+			&r.InvoiceID,
+			&r.ReminderType,
+			&r.ScheduledAt,
+			&r.SentAt,
+			&r.Status,
+			&r.CreatedAt,
+		); err != nil {
+			rows.Close()
+			return err
+		}
+		if inv, ok := invoices[r.InvoiceID]; ok {
+			inv.Reminders = append(inv.Reminders, r)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+
+	// ACTIVITY LOGS
+	rows, err = s.DB.Query(context.Background(), `
+		SELECT
+			id,
+			invoice_id,
+			actor_type,
+			action,
+			description,
+			created_at
+		FROM activity_logs
+		WHERE invoice_id = ANY($1)
+		ORDER BY created_at ASC
+	`, ids)
+	if err != nil {
+		return err
+	}
+
+	for rows.Next() {
+		var l models.ActivityLog
+		if err := rows.Scan(
+			&l.ID,
+			&l.InvoiceID,
+			&l.ActorType,
+			&l.Action,
+			&l.Description,
+			&l.CreatedAt,
+		); err != nil {
+			rows.Close()
+			return err
+		}
+		if inv, ok := invoices[l.InvoiceID]; ok {
+			inv.ActivityLogs = append(inv.ActivityLogs, l)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+
+	// Pastikan semua slice tidak nil untuk JSON yang konsisten.
+	for _, inv := range invoices {
+		if inv.Items == nil {
+			inv.Items = []models.InvoiceItem{}
+		}
+		if inv.Payments == nil {
+			inv.Payments = []models.Payment{}
+		}
+		if inv.Reminders == nil {
+			inv.Reminders = []models.Reminder{}
+		}
+		if inv.ActivityLogs == nil {
+			inv.ActivityLogs = []models.ActivityLog{}
+		}
+	}
+
+	return nil
+}
+
 // ============================================================
 // GET ALL INVOICES
 // ============================================================
@@ -416,46 +585,20 @@ func (s *InvoiceService) GetInvoices() ([]models.Invoice, error) {
 			return nil, err
 		}
 
-		invoice.Items, err = s.fetchItems(invoice.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		if invoice.Items == nil {
-			invoice.Items = []models.InvoiceItem{}
-		}
-
-		invoice.Payments, err = s.fetchPayments(invoice.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		if invoice.Payments == nil {
-			invoice.Payments = []models.Payment{}
-		}
-
-		invoice.Reminders, err = s.fetchReminders(invoice.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		if invoice.Reminders == nil {
-			invoice.Reminders = []models.Reminder{}
-		}
-
-		invoice.ActivityLogs, err = s.fetchActivityLogs(invoice.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		if invoice.ActivityLogs == nil {
-			invoice.ActivityLogs = []models.ActivityLog{}
-		}
-
 		invoices = append(invoices, invoice)
 	}
 
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Muat relasi (items/payments/reminders/activity logs) untuk seluruh
+	// invoice sekaligus agar tidak ada N+1 query.
+	idMap := make(map[string]*models.Invoice, len(invoices))
+	for i := range invoices {
+		idMap[invoices[i].ID] = &invoices[i]
+	}
+	if err := s.batchLoadRelations(idMap); err != nil {
 		return nil, err
 	}
 
@@ -865,16 +1008,39 @@ func (s *InvoiceService) GetPaymentsByInvoiceID(invoiceID string) ([]models.Paym
 // CREATE INVOICE
 // ============================================================
 
+// CreateInvoice membungkus pembuatan invoice dalam transaksi miliknya sendiri
+// dan menjalankan efek samping setelah commit (notifikasi, reminders).
 func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models.Invoice, error) {
+	ctx := context.Background()
+
+	tx, err := s.DB.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	invoice, err := s.CreateInvoiceInTx(ctx, tx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return s.FinalizeInvoiceCreated(invoice)
+}
+
+// CreateInvoiceInTx membuat invoice DENGAN transaksi yang diberikan caller
+// (misalnya transaksi approval purchase) sehingga commit invoice dan status
+// purchase bersifat atomik. Pemanggil wajib memanggil FinalizeInvoiceCreated
+// setelah transaksi berhasil di-commit.
+func (s *InvoiceService) CreateInvoiceInTx(ctx context.Context, tx pgx.Tx, req models.CreateInvoiceRequest) (*models.Invoice, error) {
 	if len(req.Items) == 0 {
 		return nil, fmt.Errorf("invoice harus memiliki minimal 1 item")
 	}
 
-	tx, err := s.DB.Begin(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(context.Background())
+	var err error
 
 	var subtotal float64
 
@@ -948,6 +1114,13 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 		}
 
 		var maxSeq int
+
+		// Kunci advisory dalam transaksi agar dua session tidak menghasilkan
+		// nomor invoice yang sama secara bersamaan (race condition).
+		if _, lerr := tx.Exec(context.Background(),
+			`SELECT pg_advisory_xact_lock($1)`, 59876101); lerr != nil {
+			return nil, lerr
+		}
 
 		err := tx.QueryRow(context.Background(), `
 			SELECT COALESCE(MAX(CAST(SUBSTRING(invoice_number FROM 'INV-[0-9]{4}-([0-9]+)') AS INTEGER)), 0)
@@ -1079,17 +1252,23 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 		}
 	}
 
-	err = tx.Commit(context.Background())
-	if err != nil {
-		return nil, err
-	}
+	return &invoice, nil
+}
+
+// FinalizeInvoiceCreated menjalankan efek samping setelah invoice berhasil
+// dibuat dan transaksi telah di-commit: notifikasi, pengiriman WA, dan
+// melengkapi data relasi invoice (items, payments, reminders, activity).
+// Dipanggil oleh CreateInvoice maupun caller yang membuat invoice via
+// CreateInvoiceInTx (misalnya approval purchase).
+func (s *InvoiceService) FinalizeInvoiceCreated(invoice *models.Invoice) (*models.Invoice, error) {
+	var err error
 
 	if invoice.Status == "SENT" || invoice.Status == "UNPAID" {
 		go NotifyInvoiceNew(s.DB, invoice.ID)
 	}
 
-	if invoice.Status == "SENT" && s.WhatsApp != nil {
-		go SendInvoiceCreatedWhatsApp(s.DB, s.WhatsApp, s.PDF, invoice.ID)
+	if invoice.Status == "SENT" {
+		go SendInvoiceCreatedWhatsApp(s.DB, s.WhatsApp, s.Email, s.PDF, invoice.ID)
 	}
 
 	invoice.Items, err = s.fetchItems(invoice.ID)
@@ -1128,7 +1307,7 @@ func (s *InvoiceService) CreateInvoice(req models.CreateInvoiceRequest) (*models
 		invoice.ActivityLogs = []models.ActivityLog{}
 	}
 
-	return &invoice, nil
+	return invoice, nil
 }
 
 // ============================================================
@@ -1436,8 +1615,8 @@ func (s *InvoiceService) updateInvoiceInternal(
 		return nil, err
 	}
 
-	if autoSendWA && previousStatus == "DRAFT" && invoice.Status == "SENT" && s.WhatsApp != nil {
-		go SendInvoiceCreatedWhatsApp(s.DB, s.WhatsApp, s.PDF, invoice.ID)
+	if autoSendWA && previousStatus == "DRAFT" && invoice.Status == "SENT" {
+		go SendInvoiceCreatedWhatsApp(s.DB, s.WhatsApp, s.Email, s.PDF, invoice.ID)
 	}
 
 	// Ambil kembali seluruh relasi
@@ -1488,14 +1667,14 @@ func (s *InvoiceService) updateInvoiceInternal(
 // pembaruan yang sudah ada, lalu mengirim pesan teks + PDF invoice ke
 // WhatsApp client secara sinkron. Error yang dikembalikan mencerminkan
 // hasil yang sebenarnya (tanpa sukses palsu).
-func (s *InvoiceService) SendInvoice(id string) (*models.Invoice, error) {
+func (s *InvoiceService) SendInvoice(id string) (*models.Invoice, *InvoiceDeliveryResult, error) {
 	current, err := s.GetInvoiceByID(id)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if current.Status != "DRAFT" {
-		return nil, fmt.Errorf("hanya invoice berstatus DRAFT yang bisa dikirim")
+		return nil, nil, fmt.Errorf("hanya invoice berstatus DRAFT yang bisa dikirim")
 	}
 
 	items := make([]models.InvoiceItemRequest, 0, len(current.Items))
@@ -1518,14 +1697,15 @@ func (s *InvoiceService) SendInvoice(id string) (*models.Invoice, error) {
 
 	updated, err := s.updateInvoiceInternal(id, req, false)
 	if err != nil {
-		return nil, fmt.Errorf("gagal mengubah status invoice: %v", err)
+		return nil, nil, fmt.Errorf("gagal mengubah status invoice: %v", err)
 	}
 
-	if err := SendInvoiceToClient(s.DB, s.WhatsApp, s.PDF, id); err != nil {
-		return updated, fmt.Errorf("invoice berstatus SENT tetapi pengiriman whatsapp gagal: %v", err)
+	delivery, err := SendInvoiceToClient(s.DB, s.WhatsApp, s.Email, s.PDF, id)
+	if err != nil {
+		return updated, delivery, fmt.Errorf("invoice berstatus SENT tetapi pengiriman notifikasi gagal: %v", err)
 	}
 
-	return updated, nil
+	return updated, delivery, nil
 }
 
 // ============================================================
@@ -1544,6 +1724,22 @@ func (s *InvoiceService) DeleteInvoice(id string) error {
 		return err
 	}
 
+// Hapus antrian notifikasi WhatsApp (outbox) yang menunjuk invoice ini,
+	// baik lewat invoice_id maupun via payment milik invoice tersebut, supaya
+	// tidak ada retry bodong setelah invoice dihapus.
+	_, err = s.DB.Exec(
+		context.Background(),
+		`DELETE FROM notification_outbox
+		 WHERE invoice_id = $1
+		    OR payment_id IN (SELECT id FROM payments WHERE invoice_id = $1)`,
+		id,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Hapus pembayaran milik invoice ini supaya tidak ada payments yatim
+	// (orphaned data) setelah invoice dihapus.
 	_, err = s.DB.Exec(
 		context.Background(),
 		`DELETE FROM payments WHERE invoice_id = $1`,

@@ -638,7 +638,7 @@ export default function SuperAdminDashboard() {
               <p className="mt-1 text-sm text-red-600">{error}</p>
 
               <p className="mt-3 text-xs text-red-500">
-                Pastikan backend berjalan di http://localhost:8080
+                Pastikan backend berjalan di {import.meta.env.VITE_API_URL}
               </p>
             </div>
           </div>

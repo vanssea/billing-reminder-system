@@ -11,13 +11,20 @@ export function setRememberMode(value) {
 
 const dynamicStorage = {
   getItem: (key) => {
-    return (
-      localStorage.getItem(key) ??
-      sessionStorage.getItem(key)
-    );
+    const sessionValue = sessionStorage.getItem(key);
+    if (sessionValue) return sessionValue;
+    return localStorage.getItem(key);
   },
   setItem: (key, value) => {
-    (remember ? localStorage : sessionStorage).setItem(key, value);
+    // Simpan hanya di satu storage agar tidak ada dua session aktif berselisih
+    // (session lama di storage lain tidak sampai terpilih oleh getItem).
+    if (remember) {
+      localStorage.setItem(key, value);
+      sessionStorage.removeItem(key);
+    } else {
+      sessionStorage.setItem(key, value);
+      localStorage.removeItem(key);
+    }
   },
   removeItem: (key) => {
     localStorage.removeItem(key);

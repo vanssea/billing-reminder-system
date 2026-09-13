@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:8080/api/notifications";
+const API_URL = import.meta.env.VITE_API_URL + "/api/notifications";
 
 // Role penerima notifikasi ditentukan backend dari JWT; frontend hanya
 // mengirim access token.

@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock3,
   Globe,
+  Mail,
   RotateCcw,
   Save,
 } from "lucide-react";
@@ -62,6 +63,7 @@ export default function Settings() {
   const { accessToken } = useAuth();
   const [enabledTypes, setEnabledTypes] = useState([]);
   const [sendTime, setSendTime] = useState(DEFAULT_SEND_TIME);
+  const [emailEnabled, setEmailEnabled] = useState(true);
   const [types, setTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [successMessage, setSuccessMessage] = useState("");
@@ -74,6 +76,7 @@ export default function Settings() {
         const data = await getSettings(accessToken);
         setEnabledTypes(data.enabled_types || []);
         setSendTime(data.send_time || DEFAULT_SEND_TIME);
+        setEmailEnabled(data.email_enabled !== false);
         setTypes(data.types || []);
       } catch (err) {
         setErrorMessage(err.message || "Gagal memuat pengaturan.");
@@ -99,11 +102,12 @@ export default function Settings() {
   const handleSave = async () => {
     try {
       const saved = await updateSettings(
-        { enabled_types: enabledTypes, send_time: sendTime },
+        { enabled_types: enabledTypes, send_time: sendTime, email_enabled: emailEnabled },
         accessToken
       );
       setEnabledTypes(saved.enabled_types || []);
       setSendTime(saved.send_time || DEFAULT_SEND_TIME);
+      setEmailEnabled(saved.email_enabled !== false);
       setTypes(saved.types || []);
       showSuccess("Pengaturan berhasil disimpan.");
     } catch (err) {
@@ -114,11 +118,12 @@ export default function Settings() {
   const handleReset = async () => {
     try {
       const saved = await updateSettings(
-        { enabled_types: types.map((t) => t.type), send_time: DEFAULT_SEND_TIME },
+        { enabled_types: types.map((t) => t.type), send_time: DEFAULT_SEND_TIME, email_enabled: true },
         accessToken
       );
       setEnabledTypes(saved.enabled_types || []);
       setSendTime(saved.send_time || DEFAULT_SEND_TIME);
+      setEmailEnabled(saved.email_enabled !== false);
       setTypes(saved.types || []);
       showSuccess("Pengaturan dikembalikan ke default.");
     } catch (err) {
@@ -232,6 +237,23 @@ export default function Settings() {
                       Berlaku global. Reminder PENDING yang belum terkirim akan mengikuti jam baru;
                       reminder yang sudah terkirim tidak diubah.
                     </p>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between rounded-xl border border-[#eef0f2] bg-white px-4 py-3.5">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Mail size={14} className="text-[#3525cd]" />
+                        <p className="text-sm font-bold text-[#191c1e]">Kirim via Email</p>
+                      </div>
+                      <p className="mt-0.5 text-xs text-[#9a97a9]">
+                        Aktifkan pengiriman reminder melalui email ke alamat client.
+                      </p>
+                    </div>
+                    <Toggle
+                      checked={emailEnabled}
+                      onChange={setEmailEnabled}
+                      label="Kirim via Email"
+                    />
                   </div>
                 </>
               )}

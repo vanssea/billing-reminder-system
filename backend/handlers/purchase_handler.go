@@ -128,9 +128,9 @@ func (h *PurchaseHandler) GetPurchaseRequestByID(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// CLIENT hanya boleh melihat purchase request miliknya sendiri.
+	// CLIENT dan role non-staf hanya boleh melihat purchase request miliknya.
 	profile := middleware.ProfileFromContext(r)
-	if profile != nil && profile.Role == models.RoleClient && req.ProfileID != profile.ID {
+	if profile != nil && !models.IsStaffRole(profile.Role) && req.ProfileID != profile.ID {
 		http.Error(w, "Permintaan pembelian tidak ditemukan", http.StatusNotFound)
 		return
 	}

@@ -18,6 +18,7 @@ type PaymentService struct {
 	DB            *pgxpool.Pool
 	ClientService *ClientService
 	WhatsApp      *WhatsAppService
+	Email         *EmailService
 }
 
 func NewPaymentService(db *pgxpool.Pool, clientService *ClientService) *PaymentService {
@@ -292,7 +293,14 @@ func (s *PaymentService) getPaymentDetailByID(ctx context.Context, id string) (*
 }
 
 func (s *PaymentService) CreatePayment(req models.CreatePaymentRequest) (*models.Payment, error) {
-	paymentDate, _ := time.Parse("2006-01-02", req.PaymentDate)
+	if req.Amount <= 0 {
+		return nil, fmt.Errorf("jumlah pembayaran harus lebih besar dari 0")
+	}
+
+	paymentDate, err := parseDateFlexible(req.PaymentDate)
+	if err != nil {
+		return nil, fmt.Errorf("format tanggal pembayaran tidak valid (gunakan YYYY-MM-DD): %v", err)
+	}
 
 	ctx := context.Background()
 
@@ -320,6 +328,9 @@ func (s *PaymentService) CreatePayment(req models.CreatePaymentRequest) (*models
 	}
 	if invoiceStatus == "CANCELLED" {
 		return nil, fmt.Errorf("invoice dibatalkan, tidak dapat melakukan pembayaran")
+	}
+	if invoiceStatus == "DRAFT" {
+		return nil, fmt.Errorf("invoice belum dikirim, tidak dapat melakukan pembayaran")
 	}
 
 	query := `
@@ -369,14 +380,20 @@ func (s *PaymentService) UpdatePayment(paymentID string, req models.UpdatePaymen
 	argIdx := 1
 
 	if req.Amount != nil {
+		if *req.Amount <= 0 {
+			return nil, fmt.Errorf("jumlah pembayaran harus lebih besar dari 0")
+		}
 		setParts = append(setParts, "amount = $"+strconv.Itoa(argIdx))
 		args = append(args, *req.Amount)
 		argIdx++
 	}
 	if req.PaymentDate != nil {
+		dt, perr := parseDateFlexible(*req.PaymentDate)
+		if perr != nil {
+			return nil, fmt.Errorf("format tanggal pembayaran tidak valid (gunakan YYYY-MM-DD): %v", perr)
+		}
 		setParts = append(setParts, "payment_date = $"+strconv.Itoa(argIdx))
-		d, _ := time.Parse("2006-01-02", *req.PaymentDate)
-		args = append(args, d)
+		args = append(args, dt)
 		argIdx++
 	}
 	if req.PaymentMethod != nil {
@@ -389,11 +406,8 @@ func (s *PaymentService) UpdatePayment(paymentID string, req models.UpdatePaymen
 		args = append(args, *req.ProofURL)
 		argIdx++
 	}
-	if req.Status != nil {
-		setParts = append(setParts, "status = $"+strconv.Itoa(argIdx))
-		args = append(args, *req.Status)
-		argIdx++
-	}
+	// Status tidak boleh diubah melalui UpdatePayment — status hanya boleh
+	// berubah lewat ApprovePayment / RejectPayment (guard transisi status).
 	if req.VerifiedBy != nil {
 		setParts = append(setParts, "verified_by = $"+strconv.Itoa(argIdx))
 		args = append(args, *req.VerifiedBy)
@@ -438,9 +452,19 @@ func (s *PaymentService) UpdatePayment(paymentID string, req models.UpdatePaymen
 }
 
 func (s *PaymentService) DeletePayment(paymentID string) error {
-	query := `DELETE FROM payments WHERE id = $1`
-	_, err := s.DB.Exec(context.Background(), query, paymentID)
-	return err
+	// Payment hanya boleh dihapus jika masih PENDING — payment yang sudah
+	// APPROVED/REJECTED dipertahankan sebagai riwayat yang sah.
+	tag, err := s.DB.Exec(context.Background(),
+		`DELETE FROM payments WHERE id = $1 AND status = 'PENDING'`,
+		paymentID,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("hanya pembayaran berstatus PENDING yang bisa dihapus")
+	}
+	return nil
 }
 
 // ============================================================
@@ -474,6 +498,28 @@ func (s *PaymentService) ApprovePayment(ctx context.Context, id string, req mode
 
 	if currentStatus == "REJECTED" {
 		return nil, fmt.Errorf("pembayaran yang ditolak tidak bisa disetujui")
+	}
+
+	// Re-check status invoice di dalam transaksi (dengan row lock) — jangan
+	// sampai payment untuk invoice yang DRAFT/CANCELLED/PAID bisa di-approve.
+	var invoiceStatus string
+	err = tx.QueryRow(ctx, `
+		SELECT status FROM invoices WHERE id = $1 FOR UPDATE
+	`, invoiceID).Scan(&invoiceStatus)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("invoice tidak ditemukan")
+		}
+		return nil, err
+	}
+	if invoiceStatus == "CANCELLED" {
+		return nil, fmt.Errorf("invoice dibatalkan, tidak dapat menyetujui pembayaran")
+	}
+	if invoiceStatus == "DRAFT" {
+		return nil, fmt.Errorf("invoice belum dikirim, tidak dapat menyetujui pembayaran")
+	}
+	if invoiceStatus == "PAID" {
+		return nil, fmt.Errorf("invoice sudah lunas, tidak dapat menyetujui pembayaran")
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -530,7 +576,7 @@ func (s *PaymentService) ApprovePayment(ctx context.Context, id string, req mode
 		return nil, err
 	}
 
-	go sendPaymentApprovedWhatsApp(s.DB, s.WhatsApp, id)
+	go sendPaymentApprovedWhatsApp(s.DB, s.WhatsApp, s.Email, id)
 	go NotifyPaymentApproved(s.DB, id)
 
 	return s.getPaymentDetailByID(ctx, id)
@@ -584,7 +630,7 @@ func (s *PaymentService) RejectPayment(ctx context.Context, id string, req model
 	if req.Notes != nil {
 		reason = *req.Notes
 	}
-	go sendPaymentRejectedWhatsApp(s.DB, s.WhatsApp, id, reason)
+	go sendPaymentRejectedWhatsApp(s.DB, s.WhatsApp, s.Email, id, reason)
 	go NotifyPaymentRejected(s.DB, id, reason)
 
 	return s.getPaymentDetailByID(ctx, id)

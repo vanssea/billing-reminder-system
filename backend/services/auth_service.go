@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"billing-reminder-system/models"
@@ -16,15 +18,30 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// profileCacheTTL menentukan berapa lama profil hasil autentikasi disimpan
+// sebelum divalidasi ulang ke Supabase. Nilai kecil menyeimbangkan performa
+// (mengurangi HTTP call per request) dengan keamanan (token yang di-revoke
+// tetap diakui paling lama TTL ini).
+const profileCacheTTL = 60 * time.Second
+
+type profileCacheEntry struct {
+	profile   *models.AuthUser
+	expiresAt time.Time
+}
+
 type AuthService struct {
 	DB            *pgxpool.Pool
 	ClientService *ClientService
+
+	cacheMu     sync.Mutex
+	profileCache map[string]profileCacheEntry
 }
 
 func NewAuthService(db *pgxpool.Pool, clientService *ClientService) *AuthService {
 	return &AuthService{
 		DB:            db,
 		ClientService: clientService,
+		profileCache:  make(map[string]profileCacheEntry),
 	}
 }
 
@@ -62,7 +79,7 @@ func (s *AuthService) Register(req models.RegisterRequest) (*models.AuthUser, er
 	httpReq.Header.Set("apikey", serviceRoleKey)
 	httpReq.Header.Set("Authorization", "Bearer "+serviceRoleKey)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 15 * time.Second}
 
 	resp, err := client.Do(httpReq)
 	if err != nil {
@@ -114,6 +131,15 @@ func (s *AuthService) Register(req models.RegisterRequest) (*models.AuthUser, er
 }
 
 func (s *AuthService) GetProfileByToken(token string) (*models.AuthUser, error) {
+	// Cache hit: profil masih valid dalam jendela TTL, hindari HTTP call.
+	s.cacheMu.Lock()
+	if entry, ok := s.profileCache[token]; ok && time.Now().Before(entry.expiresAt) {
+		profile := entry.profile
+		s.cacheMu.Unlock()
+		return profile, nil
+	}
+	s.cacheMu.Unlock()
+
 	supabaseURL := os.Getenv("SUPABASE_URL")
 	serviceRoleKey := os.Getenv("SUPABASE_SERVICE_KEY")
 
@@ -130,7 +156,7 @@ func (s *AuthService) GetProfileByToken(token string) (*models.AuthUser, error) 
 	req.Header.Set("apikey", serviceRoleKey)
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 15 * time.Second}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -166,10 +192,27 @@ func (s *AuthService) GetProfileByToken(token string) (*models.AuthUser, error) 
 		if err == pgx.ErrNoRows {
 			profile.FullName = authUser.Email
 			profile.Role = "CLIENT"
+			// User tanpa profile (belum di-provisioning) dianggap CLIENT.
+			log.Printf("PERINGATAN: user %s (%s) tidak memiliki profile, default CLIENT",
+				authUser.ID, authUser.Email)
+			s.cacheProfile(token, &profile)
 			return &profile, nil
 		}
 		return nil, err
 	}
 
+	s.cacheProfile(token, &profile)
+
 	return &profile, nil
+}
+
+// cacheProfile menyimpan profil dengan TTL agar request berikutnya tidak
+// memanggil Supabase berulang kali.
+func (s *AuthService) cacheProfile(token string, profile *models.AuthUser) {
+	s.cacheMu.Lock()
+	s.profileCache[token] = profileCacheEntry{
+		profile:   profile,
+		expiresAt: time.Now().Add(profileCacheTTL),
+	}
+	s.cacheMu.Unlock()
 }

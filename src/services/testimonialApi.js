@@ -1,6 +1,7 @@
 const API_URL = "http://localhost:8080/api/testimonials";
 const CLIENT_API_URL = "http://localhost:8080/api/client/testimonials";
 const CLIENT_ELIGIBILITY_URL = `${CLIENT_API_URL}/eligibility`;
+const API_URL = import.meta.env.VITE_API_URL + "/api/testimonials";
 
 export async function getTestimonials(limit, options = {}) {
   const url = limit && limit > 0 ? `${API_URL}?limit=${limit}` : API_URL;

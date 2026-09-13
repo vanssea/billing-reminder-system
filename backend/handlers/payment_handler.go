@@ -62,8 +62,8 @@ func (h *PaymentHandler) GetPaymentByID(w http.ResponseWriter, r *http.Request) 
 	id := chi.URLParam(r, "id")
 	profile := middleware.ProfileFromContext(r)
 
-	// CLIENT hanya boleh melihat payment miliknya sendiri.
-	if profile != nil && profile.Role == models.RoleClient {
+	// CLIENT dan role non-staf hanya boleh melihat payment miliknya sendiri.
+	if profile != nil && !models.IsStaffRole(profile.Role) {
 		client, err := h.Service.GetClientByProfileID(profile.ID)
 		if err != nil {
 			http.Error(w, "Client tidak ditemukan", http.StatusNotFound)
@@ -136,6 +136,11 @@ func (h *PaymentHandler) ApprovePayment(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
+		if strings.Contains(message, "dibatalkan") || strings.Contains(message, "belum dikirim") {
+			http.Error(w, message, http.StatusConflict)
+			return
+		}
+
 		log.Printf("ApprovePayment %s: %v", id, err)
 		http.Error(w, "Gagal menyetujui pembayaran", http.StatusInternalServerError)
 		return
@@ -202,7 +207,7 @@ func (h *PaymentHandler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if profile.Role == models.RoleClient {
+	if !models.IsStaffRole(profile.Role) {
 		owned, err := h.Service.InvoiceBelongsToClient(r.Context(), req.InvoiceID, client.ID)
 		if err != nil {
 			log.Printf("InvoiceBelongsToClient: %v", err)

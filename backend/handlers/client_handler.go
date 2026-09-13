@@ -51,8 +51,12 @@ func (h *ClientHandler) CreateClient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	adminID := "admin-system"
-	client, err := h.Service.CreateClient(r.Context(), adminID, req)
+	profile := middleware.ProfileFromContext(r)
+	if profile == nil {
+		http.Error(w, "Belum terautentikasi", http.StatusUnauthorized)
+		return
+	}
+	client, err := h.Service.CreateClient(r.Context(), profile.ID, req)
 	if err != nil {
 		http.Error(w, "Gagal membuat client: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -86,8 +90,12 @@ func (h *ClientHandler) UpdateClient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	adminID := "admin-system"
-	client, err := h.Service.UpdateClient(r.Context(), adminID, id, req)
+	profile := middleware.ProfileFromContext(r)
+	if profile == nil {
+		http.Error(w, "Belum terautentikasi", http.StatusUnauthorized)
+		return
+	}
+	client, err := h.Service.UpdateClient(r.Context(), profile.ID, id, req)
 	if err != nil {
 		http.Error(w, "Gagal mengupdate client: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -108,8 +116,12 @@ func (h *ClientHandler) UpdateClientStatus(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	adminID := "admin-system"
-	err := h.Service.UpdateClientStatus(r.Context(), adminID, id, req.Status)
+	profile := middleware.ProfileFromContext(r)
+	if profile == nil {
+		http.Error(w, "Belum terautentikasi", http.StatusUnauthorized)
+		return
+	}
+	err := h.Service.UpdateClientStatus(r.Context(), profile.ID, id, req.Status)
 	if err != nil {
 		http.Error(w, "Gagal mengubah status client: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -137,9 +149,9 @@ func (h *ClientHandler) DeleteClient(w http.ResponseWriter, r *http.Request) {
 func (h *ClientHandler) GetClientByProfileID(w http.ResponseWriter, r *http.Request) {
 	profileID := chi.URLParam(r, "profile_id")
 
-	// CLIENT hanya boleh mengakses data client miliknya sendiri;
+	// CLIENT dan role non-staf hanya boleh mengakses data client miliknya;
 	// ADMIN/SUPERADMIN boleh melihat semua.
-	if profile := middleware.ProfileFromContext(r); profile != nil && profile.Role == models.RoleClient {
+	if profile := middleware.ProfileFromContext(r); profile != nil && !models.IsStaffRole(profile.Role) {
 		if profileID != profile.ID {
 			http.Error(w, "Client tidak ditemukan", http.StatusNotFound)
 			return
