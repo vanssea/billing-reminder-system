@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"billing-reminder-system/services"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 )
 
 type PurchaseHandler struct {
@@ -78,6 +80,12 @@ func (h *PurchaseHandler) GetMyPurchaseRequests(w http.ResponseWriter, r *http.R
 
 	client, err := h.Service.ClientService.GetClientByProfileID(profile.ID)
 	if err != nil {
+		// Akun baru belum punya baris clients: balas daftar kosong, bukan 404.
+		if errors.Is(err, pgx.ErrNoRows) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode([]models.PurchaseRequestModel{})
+			return
+		}
 		http.Error(w, "Client tidak ditemukan", http.StatusNotFound)
 		return
 	}

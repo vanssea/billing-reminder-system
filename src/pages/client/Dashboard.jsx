@@ -93,7 +93,7 @@ function daysUntil(dueDate) {
 
 export default function ClientDashboard() {
   const navigate = useNavigate();
-  const { user, client, accessToken } = useAuth();
+  const { user, client, accessToken, loading: authLoading } = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [payments, setPayments] = useState([]);
   const [products, setProducts] = useState([]);
@@ -101,7 +101,7 @@ export default function ClientDashboard() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!client || !accessToken) return;
+    if (authLoading || !accessToken || !client) return;
 
     const fetchData = async () => {
       try {
@@ -122,7 +122,7 @@ export default function ClientDashboard() {
     };
 
     fetchData();
-  }, [client, accessToken]);
+  }, [client, accessToken, authLoading]);
 
   const activeInvoices = invoices.filter(
     (inv) => inv.status === "UNPAID" || inv.status === "OVERDUE"
@@ -198,7 +198,11 @@ export default function ClientDashboard() {
     return null;
   }, [invoices, products]);
 
-  if (loading) {
+  // Akun baru belum punya baris clients: jangan spinner selamanya,
+  // tampilkan halaman + CTA lengkapi profil.
+  const needsProfile = !authLoading && !!accessToken && !client;
+
+  if (loading && !needsProfile) {
     return (
       <div>
         <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">

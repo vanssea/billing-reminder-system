@@ -77,7 +77,7 @@ const emptyForm = {
 export default function ClientPayments() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { client, accessToken } = useAuth();
+  const { client, accessToken, loading: authLoading } = useAuth();
 
   const [invoices, setInvoices] = useState([]);
   const [payments, setPayments] = useState([]);
@@ -94,7 +94,7 @@ export default function ClientPayments() {
   const [previewUrl, setPreviewUrl] = useState(null);
 
   useEffect(() => {
-    if (!client || !accessToken) return;
+    if (authLoading || !accessToken || !client) return;
 
     const fetchData = async () => {
       try {
@@ -113,7 +113,7 @@ export default function ClientPayments() {
     };
 
     fetchData();
-  }, [client, accessToken]);
+  }, [client, accessToken, authLoading]);
 
   useEffect(() => {
     if (searchParams.get("invoice")) {
@@ -286,7 +286,11 @@ export default function ClientPayments() {
     }
   };
 
-  if (loading) {
+  // Akun baru belum punya baris clients: jangan spinner selamanya,
+  // tampilkan halaman + CTA lengkapi profil.
+  const needsProfile = !authLoading && !!accessToken && !client;
+
+  if (loading && !needsProfile) {
     return (
       <div>
         <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">

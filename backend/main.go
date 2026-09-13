@@ -70,7 +70,7 @@ func main() {
 	clientService := services.NewClientService(db)
 	adminService := services.NewAdminService(db)
 	productService := services.NewProductService(db)
-	testimonialService := services.NewTestimonialService(db)
+	testimonialService := services.NewTestimonialService(db, clientService)
 	faqService := services.NewFAQService(db)
 	authService := services.NewAuthService(db, clientService)
 	invoiceService := services.NewInvoiceService(db, clientService)

@@ -14,6 +14,10 @@ const LupaPassword = lazy(() => import("./pages/auth/LupaPassword"));
 const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
 
 // Client
+import ClientDashboard from "./pages/client/Dashboard";
+import ClientProducts from "./pages/client/Products";
+import InvoiceDetail from "./pages/client/InvoiceDetail";
+import ClientTestimonials from "./pages/client/Testimonials";
 const ClientDashboard = lazy(() => import("./pages/client/Dashboard"));
 const ClientInvoices = lazy(() => import("./pages/client/MyInvoices"));
 const ClientPayments = lazy(() => import("./pages/client/Payments"));
@@ -97,6 +101,7 @@ function App() {
           <Route path="invoices/:id" element={<InvoiceDetail />} />
           <Route path="payments" element={<ClientPayments />} />
           <Route path="products" element={<ClientProducts />} />
+          <Route path="testimonials" element={<ClientTestimonials />} />
           <Route path="profile" element={<ClientProfile />} />
         </Route>
 

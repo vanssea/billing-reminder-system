@@ -71,7 +71,7 @@ export default function InvoiceDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { client, accessToken } = useAuth();
+  const { client, accessToken, loading: authLoading } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -79,7 +79,7 @@ export default function InvoiceDetail() {
   const invoiceRef = useRef(null);
 
   useEffect(() => {
-    if (!client || !accessToken || !id) return;
+    if (authLoading || !accessToken || !id || !client) return;
 
     const fetchData = async () => {
       try {
@@ -94,7 +94,7 @@ export default function InvoiceDetail() {
     };
 
     fetchData();
-  }, [client, accessToken, id]);
+  }, [client, accessToken, authLoading, id]);
 
   useEffect(() => {
     if (location.state?.print && data?.invoice) {
@@ -127,7 +127,19 @@ export default function InvoiceDetail() {
     }
   }, [data]);
 
-  if (loading) {
+  // Dukungan tombol "Download PDF" dari halaman daftar (MyInvoices): saat
+  // diarahkan ke sini dengan state.pdf, unduh PDF begitu data tersedia.
+  useEffect(() => {
+    if (location.state?.pdf && data?.invoice && !downloading) {
+      handleDownloadPDF();
+    }
+  }, [location.state, data, downloading, handleDownloadPDF]);
+
+  // Akun baru belum punya baris clients: jangan spinner selamanya,
+  // tampilkan arahan lengkapi profil.
+  const needsProfile = !authLoading && !!accessToken && !!id && !client;
+
+  if (loading && !needsProfile) {
     return (
       <div>
         <main className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">

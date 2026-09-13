@@ -21,4 +21,11 @@ func TestimonialRoutes(router *chi.Mux, testimonialHandler *handlers.Testimonial
 		r.Put("/api/testimonials/{id}", testimonialHandler.UpdateTestimonial)
 		r.Delete("/api/testimonials/{id}", testimonialHandler.DeleteTestimonial)
 	})
+
+	// Client testimonial: hanya untuk CLIENT yang sudah punya pembelian APPROVED.
+	router.Group(func(r chi.Router) {
+		r.Use(middleware.RequireAuth(authService))
+		r.Get("/api/client/testimonials/eligibility", testimonialHandler.GetClientEligibility)
+		r.Post("/api/client/testimonials", testimonialHandler.CreateClientTestimonial)
+	})
 }

@@ -12,6 +12,7 @@ import {
   Settings,
   ShieldCheck,
   ShoppingBag,
+  Star,
   Users,
 } from "lucide-react";
 import { Logo } from "../landing/Navbar";
@@ -54,6 +55,7 @@ const clientMenu = {
     { label: "My Invoices", icon: ReceiptText, path: "/client/invoices" },
     { label: "Payments", icon: CreditCard, path: "/client/payments" },
     { label: "Buy Package", icon: Server, path: "/client/products" },
+    { label: "Testimonials", icon: Star, path: "/client/testimonials" },
   ],
   bottomItems: [],
 };
