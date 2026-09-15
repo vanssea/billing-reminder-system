@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import {
@@ -119,7 +119,7 @@ export default function AdminReminders() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  const loadReminders = async () => {
+  const loadReminders = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
@@ -131,12 +131,12 @@ export default function AdminReminders() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [accessToken]);
 
   useEffect(() => {
     const timer = setTimeout(loadReminders, 0);
     return () => clearTimeout(timer);
-  }, []);
+  }, [loadReminders]);
 
   useEffect(() => {
     document.body.style.overflow = selectedReminder ? "hidden" : "";

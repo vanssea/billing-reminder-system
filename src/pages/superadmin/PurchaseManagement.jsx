@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Search,
   CheckCircle2,
@@ -65,7 +65,7 @@ export default function PurchaseManagement() {
   const [actionType, setActionType] = useState("");
   const [adminNotes, setAdminNotes] = useState("");
 
-  const loadRequests = async () => {
+  const loadRequests = useCallback(async () => {
     try {
       setError("");
       const data = await getAllPurchaseRequests(accessToken);
@@ -76,11 +76,12 @@ export default function PurchaseManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [accessToken]);
 
   useEffect(() => {
-    loadRequests();
-  }, []);
+    const timer = setTimeout(() => loadRequests(), 0);
+    return () => clearTimeout(timer);
+  }, [loadRequests]);
 
   useEffect(() => {
     if (!success) return;

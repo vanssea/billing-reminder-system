@@ -1,6 +1,5 @@
 const API_URL = import.meta.env.VITE_API_URL + "/api/products";
 const CLIENT_API_URL = import.meta.env.VITE_API_URL + "/api/client";
-const ADMIN_PRODUCT_API_URL = import.meta.env.VITE_API_URL + "/api/admin/products";
 
 export async function getProducts() {
   const response = await fetch(API_URL);

@@ -40,7 +40,7 @@ const getMissingProfileFields = (client) => {
 
 export default function ClientProducts() {
   const navigate = useNavigate();
-  const { user, client, isProfileComplete, accessToken } = useAuth();
+  const { client, isProfileComplete, accessToken } = useAuth();
   const [yearly, setYearly] = useState(true);
   const [products, setProducts] = useState([]);
   const [activeProductIds, setActiveProductIds] = useState(new Set());

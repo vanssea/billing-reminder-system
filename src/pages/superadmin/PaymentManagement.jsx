@@ -183,7 +183,8 @@ export default function PaymentManagement() {
   }, [accessToken]);
 
   useEffect(() => {
-    loadPayments();
+    const timer = setTimeout(() => loadPayments(), 0);
+    return () => clearTimeout(timer);
   }, [loadPayments]);
 
   const isAnyModalOpen = detailId || approveId || rejectId;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import { useAuth } from "../../context/AuthContext";
@@ -18,10 +18,6 @@ import {
   Sparkles,
   Rocket,
   AlertTriangle,
-  Tag,
-  DollarSign,
-  FileText,
-  Globe,
 } from "lucide-react";
 
 import {
@@ -33,15 +29,6 @@ import {
 
 const formatPrice = (price) =>
   new Intl.NumberFormat("id-ID").format(price);
-
-const formatDate = (date) =>
-  date
-    ? new Date(date).toLocaleDateString("id-ID", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
-    : "-";
 
 const formatDateTime = (date) =>
   date
@@ -79,6 +66,12 @@ const colorStyles = {
   orange: "bg-gradient-to-r from-[#d97706] to-[#f59e0b]",
 };
 
+function FieldError({ errors, field }) {
+  return errors[field] ? (
+    <p className="mt-1 text-xs font-medium text-[#ba1a1a]">{errors[field]}</p>
+  ) : null;
+}
+
 function StatusBadge({ status }) {
   const active = status === "Active";
   return (
@@ -108,9 +101,24 @@ export default function ProductManagement() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  useEffect(() => {
-    loadProducts();
+  const loadProducts = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const data = await getProducts();
+      setProducts((data || []).map((p) => ({ ...p, status: toUiStatus(p.status) })));
+    } catch (err) {
+      console.error(err);
+      setError("Gagal mengambil data produk dari server.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => loadProducts(), 0);
+    return () => clearTimeout(timer);
+  }, [loadProducts]);
 
   useEffect(() => {
     if (!success) return;
@@ -129,20 +137,6 @@ export default function ProductManagement() {
       document.body.style.overflow = "";
     };
   }, [modalOpen, detailTarget, deleteTarget]);
-
-  const loadProducts = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const data = await getProducts();
-      setProducts((data || []).map((p) => ({ ...p, status: toUiStatus(p.status) })));
-    } catch (err) {
-      console.error(err);
-      setError("Gagal mengambil data produk dari server.");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const stats = useMemo(
     () => [
@@ -276,11 +270,6 @@ export default function ProductManagement() {
     formErrors[field]
       ? "w-full rounded-lg border border-[#ba1a1a] bg-[#fffafa] px-3 py-2 text-sm text-[#191c1e] outline-none transition focus:border-[#ba1a1a] focus:ring-2 focus:ring-[#ba1a1a]/20"
       : inputClass;
-
-  const FieldError = ({ field }) =>
-    formErrors[field] ? (
-      <p className="mt-1 text-xs font-medium text-[#ba1a1a]">{formErrors[field]}</p>
-    ) : null;
 
   return (
     <div className="min-h-screen bg-[#fcf8ff] pt-16 app-content">
@@ -526,7 +515,7 @@ export default function ProductManagement() {
                     placeholder="cth: Paket Hosting Basic"
                     className={fieldClass("name")}
                   />
-                  <FieldError field="name" />
+                  <FieldError errors={formErrors} field="name" />
                 </div>
 
                 <div>
@@ -541,7 +530,7 @@ export default function ProductManagement() {
                     rows={3}
                     className={fieldClass("description")}
                   />
-                  <FieldError field="description" />
+                  <FieldError errors={formErrors} field="description" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -557,7 +546,7 @@ export default function ProductManagement() {
                       placeholder="cth: 150000"
                       className={fieldClass("price")}
                     />
-                    <FieldError field="price" />
+                    <FieldError errors={formErrors} field="price" />
                   </div>
 
                   <div>

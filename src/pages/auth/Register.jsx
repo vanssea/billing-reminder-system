@@ -29,8 +29,8 @@ export default function Register() {
     const planParam = (params.get("plan") || "").toLowerCase();
 
     if (!planParam) {
-      setLoadingPlan(false);
-      return;
+      const timer = setTimeout(() => setLoadingPlan(false), 0);
+      return () => clearTimeout(timer);
     }
 
     getProducts()

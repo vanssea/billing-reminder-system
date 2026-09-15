@@ -121,7 +121,7 @@ export default function AdminClients() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [accessToken]);
 
   useEffect(() => {
     if (!success) return;

@@ -14,14 +14,11 @@ const LupaPassword = lazy(() => import("./pages/auth/LupaPassword"));
 const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
 
 // Client
-import ClientDashboard from "./pages/client/Dashboard";
-import ClientProducts from "./pages/client/Products";
-import InvoiceDetail from "./pages/client/InvoiceDetail";
-import ClientTestimonials from "./pages/client/Testimonials";
 const ClientDashboard = lazy(() => import("./pages/client/Dashboard"));
 const ClientInvoices = lazy(() => import("./pages/client/MyInvoices"));
 const ClientPayments = lazy(() => import("./pages/client/Payments"));
 const ClientProducts = lazy(() => import("./pages/client/Products"));
+const ClientTestimonials = lazy(() => import("./pages/client/Testimonials"));
 const InvoiceDetail = lazy(() => import("./pages/client/InvoiceDetail"));
 const ClientProfile = lazy(() => import("./pages/client/Profile"));
 
