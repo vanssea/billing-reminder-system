@@ -17,6 +17,7 @@ import (
 	waLog "go.mau.fi/whatsmeow/util/log"
 	"google.golang.org/protobuf/proto"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"
 )
 
@@ -34,15 +35,26 @@ type WhatsAppService struct {
 func NewWhatsAppService() (*WhatsAppService, error) {
 	ctx := context.Background()
 
-	wadbPath := os.Getenv("WA_SESSIONS_DB_PATH")
-	if strings.TrimSpace(wadbPath) == "" {
-		wadbPath = "wa_sessions.db"
-	}
-	if !strings.Contains(wadbPath, "file:") {
-		wadbPath = "file:" + wadbPath
+	// Sesi WA bisa disimpan di file SQLite (lokal) atau di PostgreSQL (Railway,
+	// agar service web dan worker cron dapat berbagi sesi yang sama tanpa volume).
+	wadbPath := strings.TrimSpace(os.Getenv("WA_SESSIONS_DB_PATH"))
+	var dialect, address string
+	switch {
+	case strings.HasPrefix(wadbPath, "postgres://"), strings.HasPrefix(wadbPath, "postgresql://"):
+		dialect = "pgx"
+		address = wadbPath
+	default:
+		if wadbPath == "" {
+			wadbPath = "wa_sessions.db"
+		}
+		if !strings.Contains(wadbPath, "file:") {
+			wadbPath = "file:" + wadbPath
+		}
+		dialect = "sqlite"
+		address = wadbPath + "?_foreign_keys=on"
 	}
 
-	container, err := sqlstore.New(ctx, "sqlite", wadbPath+"?_foreign_keys=on", nil)
+	container, err := sqlstore.New(ctx, dialect, address, nil)
 	if err != nil {
 		return nil, fmt.Errorf("gagal buka database sesi; cek WA_SESSIONS_DB_PATH: %w", err)
 	}
