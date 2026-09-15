@@ -114,7 +114,7 @@ export default function ClientDashboard() {
         setInvoices(invData || []);
         setPayments(payData || []);
         setProducts(prodData || []);
-      } catch (err) {
+      } catch {
         setError("Gagal memuat data dashboard");
       } finally {
         setLoading(false);
@@ -123,10 +123,6 @@ export default function ClientDashboard() {
 
     fetchData();
   }, [client, accessToken, authLoading]);
-
-  const activeInvoices = invoices.filter(
-    (inv) => inv.status === "UNPAID" || inv.status === "OVERDUE"
-  );
 
   const stats = useMemo(() => {
     const approvedPayments = payments.filter((p) => p.verification_status === "APPROVED");

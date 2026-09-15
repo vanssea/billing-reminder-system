@@ -75,12 +75,7 @@ export function AuthProvider({ children }) {
     const authUser = { id: data.user.id, email: data.user.email, ...profile };
 
     // Fetch client data by profile_id
-    let clientData = null;
-    try {
-      clientData = await getClientByProfileId(data.user.id, data.session.access_token);
-    } catch {
-      clientData = null;
-    }
+    const clientData = await getClientByProfileId(data.user.id, data.session.access_token).catch(() => null);
 
     setUser(authUser);
     setClient(clientData);

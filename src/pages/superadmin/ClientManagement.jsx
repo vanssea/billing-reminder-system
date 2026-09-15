@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import {
@@ -13,7 +13,6 @@ import {
   Globe,
   AlertTriangle,
   Eye,
-  FileText,
   Phone,
   CalendarDays,
   CheckCircle2,
@@ -61,6 +60,12 @@ const dbToStatus = {
 const toUiStatus = (status) =>
   dbToStatus[(status || "").toUpperCase()] || status || "Inactive";
 
+function FieldError({ errors, field }) {
+  return errors[field] ? (
+    <p className="mt-1 text-xs font-medium text-[#ba1a1a]">{errors[field]}</p>
+  ) : null;
+}
+
 function StatusBadge({ status }) {
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyles[status] || statusStyles.Inactive}`}>
@@ -77,7 +82,7 @@ export default function ClientManagement() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -88,17 +93,7 @@ export default function ClientManagement() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [detailTarget, setDetailTarget] = useState(null);
 
-  useEffect(() => {
-    loadClients();
-  }, []);
-
-  useEffect(() => {
-    if (!success) return;
-    const timer = setTimeout(() => setSuccess(""), 4000);
-    return () => clearTimeout(timer);
-  }, [success]);
-
-  const loadClients = async () => {
+  const loadClients = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
@@ -118,7 +113,12 @@ export default function ClientManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [accessToken]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => loadClients(), 0);
+    return () => clearTimeout(timer);
+  }, [loadClients]);
 
   const stats = useMemo(
     () => [
@@ -261,11 +261,6 @@ setSuccess("Client berhasil dihapus.");
     errors[field]
       ? "w-full rounded-lg border border-[#ba1a1a] bg-[#fffafa] px-3 py-2 text-sm text-[#191c1e] outline-none transition focus:border-[#ba1a1a] focus:ring-2 focus:ring-[#ba1a1a]/20"
       : inputClass;
-
-  const FieldError = ({ field }) =>
-    errors[field] ? (
-      <p className="mt-1 text-xs font-medium text-[#ba1a1a]">{errors[field]}</p>
-    ) : null;
 
   return (
     <div className="min-h-screen bg-[#fcf8ff] pt-16 app-content">
@@ -538,7 +533,7 @@ setSuccess("Client berhasil dihapus.");
                     placeholder="cth: PT Nusantara Jaya"
                     className={fieldClass("company_name")}
                   />
-                  <FieldError field="company_name" />
+                  <FieldError errors={errors} field="company_name" />
                 </div>
 
                 <div>
@@ -555,7 +550,7 @@ setSuccess("Client berhasil dihapus.");
                     placeholder="cth: Budi Santoso"
                     className={fieldClass("pic_name")}
                   />
-                  <FieldError field="pic_name" />
+                  <FieldError errors={errors} field="pic_name" />
                 </div>
 
                 <div>
@@ -572,7 +567,7 @@ setSuccess("Client berhasil dihapus.");
                     placeholder="contact@perusahaan.com"
                     className={fieldClass("email")}
                   />
-                  <FieldError field="email" />
+                  <FieldError errors={errors} field="email" />
                 </div>
 
                 <div>
@@ -592,7 +587,7 @@ setSuccess("Client berhasil dihapus.");
                     placeholder="cth: 081234567890"
                     className={fieldClass("phone")}
                   />
-                  <FieldError field="phone" />
+                  <FieldError errors={errors} field="phone" />
                 </div>
 
                 <div>
@@ -609,7 +604,7 @@ setSuccess("Client berhasil dihapus.");
                     rows={3}
                     className={fieldClass("address")}
                   />
-                  <FieldError field="address" />
+                  <FieldError errors={errors} field="address" />
                 </div>
 
                 {editingId && (

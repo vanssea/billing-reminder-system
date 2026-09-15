@@ -60,20 +60,23 @@ export default function ClientProfile() {
   const location = useLocation();
 
   useEffect(() => {
-    if (client) {
-      setProfile({
-        company_name: client.company_name || "",
-        pic_name: client.pic_name || user?.full_name || "",
-        email: client.email || user?.email || "",
-        phone: client.phone || "",
-        address: client.address || "",
-      });
-    }
-    setProfileLoading(false);
+    const timer = setTimeout(() => {
+      if (client) {
+        setProfile({
+          company_name: client.company_name || "",
+          pic_name: client.pic_name || user?.full_name || "",
+          email: client.email || user?.email || "",
+          phone: client.phone || "",
+          address: client.address || "",
+        });
+      }
+      setProfileLoading(false);
 
-    if (location.state?.purchaseSuccess) {
-      showToast("Permintaan pembelian berhasil dikirim! Admin akan memproses dan menghubungi Anda.");
-    }
+      if (location.state?.purchaseSuccess) {
+        showToast("Permintaan pembelian berhasil dikirim! Admin akan memproses dan menghubungi Anda.");
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [client, user, location]);
 
   const handleProfileSubmit = async (event) => {

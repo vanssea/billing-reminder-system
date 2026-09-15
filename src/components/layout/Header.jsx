@@ -80,18 +80,29 @@ const Header = ({ role = "admin" }) => {
   }, [accessToken]);
 
   useEffect(() => {
-    loadNotifications();
+    const fetchNotifications = async () => {
+      try {
+        const result = await getNotifications(15, accessToken);
+        setNotifications(result.data || []);
+        setUnreadCount(result.unread_count || 0);
+      } catch {
+        setNotifications([]);
+      }
+    };
 
-    const interval = setInterval(loadNotifications, 30000);
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000);
 
     return () => clearInterval(interval);
-  }, [loadNotifications]);
+  }, [accessToken]);
 
   const handleMarkAllRead = async () => {
     try {
       await markAllNotificationsRead(accessToken);
       await loadNotifications();
-    } catch {}
+    } catch {
+      // abaikan
+    }
   };
 
   const handleMarkRead = async (notification) => {

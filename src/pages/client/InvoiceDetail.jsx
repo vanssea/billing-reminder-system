@@ -86,7 +86,7 @@ export default function InvoiceDetail() {
         setLoading(true);
         const result = await getClientInvoiceById(id, accessToken);
         setData(result);
-      } catch (err) {
+      } catch {
         setError("Gagal memuat detail invoice");
       } finally {
         setLoading(false);
@@ -119,7 +119,7 @@ export default function InvoiceDetail() {
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       const pdf = new jsPDF("p", "mm", "a4");
       pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
-      pdf.save(`${invoice?.invoice_number || "invoice"}.pdf`);
+      pdf.save(`${data?.invoice?.invoice_number || "invoice"}.pdf`);
     } catch (err) {
       setError("Gagal mengunduh PDF: " + err.message);
     } finally {
@@ -131,7 +131,8 @@ export default function InvoiceDetail() {
   // diarahkan ke sini dengan state.pdf, unduh PDF begitu data tersedia.
   useEffect(() => {
     if (location.state?.pdf && data?.invoice && !downloading) {
-      handleDownloadPDF();
+      const timer = setTimeout(handleDownloadPDF, 0);
+      return () => clearTimeout(timer);
     }
   }, [location.state, data, downloading, handleDownloadPDF]);
 

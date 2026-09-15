@@ -52,7 +52,7 @@ export default function ClientInvoices() {
         ]);
         setInvoices(invData || []);
         setPayments(payData || []);
-      } catch (err) {
+      } catch {
         setError("Gagal memuat data invoice");
       } finally {
         setLoading(false);

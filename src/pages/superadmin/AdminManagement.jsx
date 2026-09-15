@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import { useAuth } from "../../context/AuthContext";
@@ -81,7 +81,7 @@ export default function AdminManagement() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [detailTarget, setDetailTarget] = useState(null);
 
-  const loadAdmins = async () => {
+  const loadAdmins = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
@@ -94,12 +94,12 @@ export default function AdminManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [accessToken]);
 
   useEffect(() => {
     const timer = setTimeout(loadAdmins, 0);
     return () => clearTimeout(timer);
-  }, []);
+  }, [loadAdmins]);
 
   useEffect(() => {
     if (!success) return;

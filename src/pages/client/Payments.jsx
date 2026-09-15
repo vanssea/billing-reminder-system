@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Clock,
@@ -105,7 +105,7 @@ export default function ClientPayments() {
         ]);
         setInvoices(invData || []);
         setPayments(payData || []);
-      } catch (err) {
+      } catch {
         setError("Gagal memuat data pembayaran");
       } finally {
         setLoading(false);
@@ -116,20 +116,22 @@ export default function ClientPayments() {
   }, [client, accessToken, authLoading]);
 
   useEffect(() => {
-    if (searchParams.get("invoice")) {
-      const invoiceParam = searchParams.get("invoice");
-      const invoice = invoices.find(
-        (item) => item.invoice_number === invoiceParam || item.id === invoiceParam
-      );
-      const payment = invoice
-        ? payments.find((p) => p.invoice_id === invoice.id)
-        : null;
-      const canPreselect =
-        Boolean(invoice) &&
-        (invoice.status === "UNPAID" || invoice.status === "OVERDUE" || invoice.status === "SENT") &&
-        (!payment || payment.verification_status === "REJECTED");
+    if (!searchParams.get("invoice")) return;
+    const invoiceParam = searchParams.get("invoice");
+    const invoice = invoices.find(
+      (item) => item.invoice_number === invoiceParam || item.id === invoiceParam
+    );
+    const payment = invoice
+      ? payments.find((p) => p.invoice_id === invoice.id)
+      : null;
+    const canPreselect =
+      Boolean(invoice) &&
+      (invoice.status === "UNPAID" || invoice.status === "OVERDUE" || invoice.status === "SENT") &&
+      (!payment || payment.verification_status === "REJECTED");
 
-      if (canPreselect) {
+    let timer;
+    if (canPreselect) {
+      timer = setTimeout(() => {
         setForm({
           invoiceId: invoice.id,
           amount: String(getInvoiceTotal(invoice)),
@@ -139,19 +141,23 @@ export default function ClientPayments() {
           proofName: "",
         });
         setOpen(true);
-      }
-      setSearchParams({}, { replace: true });
+      }, 0);
     }
+    setSearchParams({}, { replace: true });
+    return () => clearTimeout(timer);
   }, [searchParams, setSearchParams, invoices, payments]);
 
   useEffect(() => {
     if (!form.proofFile) {
-      setPreviewUrl(null);
-      return;
+      const timer = setTimeout(() => setPreviewUrl(null), 0);
+      return () => clearTimeout(timer);
     }
     const url = URL.createObjectURL(form.proofFile);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
+    const timer = setTimeout(() => setPreviewUrl(url), 0);
+    return () => {
+      clearTimeout(timer);
+      URL.revokeObjectURL(url);
+    };
   }, [form.proofFile]);
 
   const outstanding = invoices
